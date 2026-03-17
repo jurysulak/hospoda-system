@@ -14,7 +14,7 @@ export async function GET() {
     },
   });
 
-  const result = tables.map((table) => {
+  const result = tables.map((table: typeof tables[number]) => {
     const openOrder = table.orders[0];
     const items = openOrder?.items ?? [];
 
