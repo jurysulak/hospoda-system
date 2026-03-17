@@ -39,7 +39,9 @@ export async function POST(
   let amount = 0;
 
   for (const selected of items) {
-    const orderItem = order.items.find((item) => item.id === selected.itemId);
+    const orderItem = order.items.find(
+      (item: any) => item.id === selected.itemId
+    );
 
     if (!orderItem) continue;
     if (selected.quantity <= 0) continue;
