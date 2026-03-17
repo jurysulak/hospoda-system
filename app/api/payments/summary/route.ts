@@ -43,12 +43,16 @@ export async function GET() {
     },
   });
 
-  const totalAmount = payments.reduce((sum, payment) => sum + payment.amount, 0);
+  const totalAmount = payments.reduce(
+    (sum: number, payment: any) => sum + payment.amount,
+    0
+  );
+
   const paymentCount = payments.length;
 
   const byTableMap: Record<string, number> = {};
 
-  for (const payment of payments) {
+  for (const payment of payments as any[]) {
     const tableName = payment.order.table.name;
     byTableMap[tableName] = (byTableMap[tableName] || 0) + payment.amount;
   }
