@@ -15,7 +15,7 @@ export async function GET() {
     },
   });
 
-  const result = payments.map((payment) => ({
+  const result = payments.map((payment: any) => ({
     id: payment.id,
     amount: payment.amount,
     paymentMethod: payment.paymentMethod,
