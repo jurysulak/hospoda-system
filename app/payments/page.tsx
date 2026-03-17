@@ -1,31 +1,20 @@
-type PaymentItem = {
-  id: number;
-  amount: number;
-  paymentMethod: string | null;
-  createdAt: string;
-  tableName: string;
-  tableId: number;
-};
-
-async function getPayments(): Promise<PaymentItem[]> {
-  const res = await fetch("http://localhost:3000/api/payments", {
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    throw new Error("Nepodařilo se načíst platby");
-  }
-
-  return res.json();
-}
+import { prisma } from "@/lib/prisma";
 
 export default async function PaymentsPage() {
-  const payments = await getPayments();
+  const payments = await prisma.payment.findMany({
+    orderBy: {
+      createdAt: "desc",
+    },
+    include: {
+      order: {
+        include: {
+          table: true,
+        },
+      },
+    },
+  });
 
-  const total = payments.reduce(
-    (sum, payment) => sum + payment.amount,
-    0
-  );
+  const total = payments.reduce((sum, payment) => sum + payment.amount, 0);
 
   return (
     <main className="min-h-screen bg-slate-200 p-6">
@@ -60,7 +49,7 @@ export default async function PaymentsPage() {
                 >
                   <div>
                     <div className="text-xl font-semibold">
-                      {payment.tableName}
+                      {payment.order.table.name}
                     </div>
 
                     <div className="text-sm text-slate-500">

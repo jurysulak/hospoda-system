@@ -1,14 +1,4 @@
-async function getTables() {
-  const res = await fetch("http://localhost:3000/api/tables", {
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    throw new Error("Nepodařilo se načíst stoly");
-  }
-
-  return res.json();
-}
+import { prisma } from "@/lib/prisma";
 
 export default async function SectionPage({
   params,
@@ -16,11 +6,43 @@ export default async function SectionPage({
   params: Promise<{ name: string }>;
 }) {
   const { name } = await params;
-  const tables = await getTables();
+
+  const tables = await prisma.table.findMany({
+    orderBy: { id: "asc" },
+    include: {
+      orders: {
+        where: { status: "open" },
+        include: {
+          items: true,
+        },
+      },
+    },
+  });
+
+  const mappedTables = tables.map((table) => {
+    const openOrder = table.orders[0];
+    const items = openOrder?.items ?? [];
+
+    const total = items.reduce(
+      (sum, item) => sum + item.unitPrice * item.quantity,
+      0
+    );
+
+    const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+
+    return {
+      id: table.id,
+      name: table.name,
+      section: table.section,
+      status: itemCount > 0 ? "occupied" : "free",
+      total,
+      itemCount,
+    };
+  });
 
   const sectionLabel = name === "vnitrek" ? "Vnitřek" : "Zahrádka";
 
-  const filteredTables = tables.filter((table: any) => {
+  const filteredTables = mappedTables.filter((table) => {
     if (name === "vnitrek") return table.section === "Vnitřek";
     if (name === "zahradka") return table.section === "Zahrádka";
     return false;
@@ -44,13 +66,11 @@ export default async function SectionPage({
 
         <div className="rounded-3xl bg-white p-6 shadow-sm">
           <h1 className="text-4xl font-bold">{sectionLabel}</h1>
-          <p className="mt-2 text-lg text-slate-600">
-            Vyber stůl
-          </p>
+          <p className="mt-2 text-lg text-slate-600">Vyber stůl</p>
         </div>
 
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
-          {filteredTables.map((table: any) => {
+          {filteredTables.map((table) => {
             const isFree = table.status === "free";
 
             return (

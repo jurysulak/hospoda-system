@@ -1,17 +1,61 @@
-async function getSummary() {
-  const res = await fetch("http://localhost:3000/api/payments/summary", {
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    throw new Error("Nepodařilo se načíst denní souhrn");
-  }
-
-  return res.json();
-}
+import { prisma } from "@/lib/prisma";
 
 export default async function SummaryPage() {
-  const summary = await getSummary();
+  const now = new Date();
+
+  const startOfDay = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    0,
+    0,
+    0,
+    0
+  );
+
+  const endOfDay = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    23,
+    59,
+    59,
+    999
+  );
+
+  const payments = await prisma.payment.findMany({
+    where: {
+      createdAt: {
+        gte: startOfDay,
+        lte: endOfDay,
+      },
+    },
+    include: {
+      order: {
+        include: {
+          table: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  const totalAmount = payments.reduce((sum, payment) => sum + payment.amount, 0);
+  const paymentCount = payments.length;
+
+  const byTableMap: Record<string, number> = {};
+
+  for (const payment of payments) {
+    const tableName = payment.order.table.name;
+    byTableMap[tableName] = (byTableMap[tableName] || 0) + payment.amount;
+  }
+
+  const byTable = Object.entries(byTableMap).map(([tableName, amount]) => ({
+    tableName,
+    amount,
+  }));
 
   return (
     <main className="min-h-screen bg-slate-200 p-6">
@@ -34,14 +78,14 @@ export default async function SummaryPage() {
           <div className="rounded-3xl bg-green-100 p-6 shadow-sm">
             <div className="text-lg text-slate-700">Dnes zaplaceno</div>
             <div className="mt-2 text-4xl font-bold">
-              {summary.totalAmount} Kč
+              {totalAmount} Kč
             </div>
           </div>
 
           <div className="rounded-3xl bg-blue-100 p-6 shadow-sm">
             <div className="text-lg text-slate-700">Počet plateb</div>
             <div className="mt-2 text-4xl font-bold">
-              {summary.paymentCount}
+              {paymentCount}
             </div>
           </div>
         </div>
@@ -51,7 +95,7 @@ export default async function SummaryPage() {
             <h2 className="mb-4 text-2xl font-bold">Podle stolů</h2>
 
             <div className="space-y-3">
-              {summary.byTable.map((row: any) => (
+              {byTable.map((row) => (
                 <div
                   key={row.tableName}
                   className="flex items-center justify-between rounded-2xl border p-4"
@@ -67,7 +111,7 @@ export default async function SummaryPage() {
             <h2 className="mb-4 text-2xl font-bold">Poslední platby</h2>
 
             <div className="space-y-3">
-              {summary.payments.map((payment: any) => {
+              {payments.map((payment) => {
                 const date = new Date(payment.createdAt);
 
                 return (
