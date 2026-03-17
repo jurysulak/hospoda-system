@@ -1,36 +1,40 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
-export async function GET() {
-  const tables = await prisma.table.findMany({
-    orderBy: { id: "asc" },
+export async function POST(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const tableId = Number(id);
+
+  const order = await prisma.order.findFirst({
+    where: {
+      tableId,
+      status: "open",
+    },
     include: {
-      orders: {
-        where: { status: "open" },
-        include: {
-          items: true,
-        },
-      },
+      items: true,
     },
   });
 
-  const result = tables.map((table) => {
-    const openOrder = table.orders[0];
-    const items = openOrder?.items ?? [];
+  if (!order) {
+    return NextResponse.json({ success: true });
+  }
 
-    const total = items.reduce(
-      (sum, item) => sum + item.unitPrice * item.quantity,
-      0
-    );
-
-    return {
-      id: table.id,
-      name: table.name,
-      status: items.length > 0 ? "occupied" : "free",
-      total,
-      itemCount: items.length,
-    };
+  await prisma.orderItem.deleteMany({
+    where: {
+      orderId: order.id,
+    },
   });
 
-  return NextResponse.json(result);
+  await prisma.order.update({
+    where: { id: order.id },
+    data: {
+      status: "closed",
+      closedAt: new Date(),
+    },
+  });
+
+  return NextResponse.json({ success: true });
 }
