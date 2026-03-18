@@ -53,6 +53,13 @@ export default function Home() {
           >
             Správa produktů
           </a>
+
+          <a
+            href="/stock"
+            className="rounded-2xl bg-amber-600 px-5 py-4 text-lg font-semibold text-white shadow-sm"
+          >
+            Sklad
+          </a>
         </div>
       </div>
     </main>
