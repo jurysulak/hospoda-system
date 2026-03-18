@@ -97,10 +97,21 @@ export default function StockPage() {
         </a>
 
         <div className="rounded-3xl bg-white p-6 shadow-sm">
-          <h1 className="text-4xl font-bold">Sklad</h1>
-          <p className="mt-2 text-lg text-slate-600">
-            Evidence skladových položek
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 className="text-4xl font-bold">Sklad</h1>
+              <p className="mt-2 text-lg text-slate-600">
+                Evidence skladových položek
+              </p>
+            </div>
+
+            <a
+              href="/stock/history"
+              className="rounded-2xl bg-slate-900 px-5 py-4 text-lg font-semibold text-white shadow-sm"
+            >
+              Historie skladu
+            </a>
+          </div>
         </div>
 
         <div className="rounded-3xl bg-white p-6 shadow-sm space-y-4">
@@ -141,38 +152,7 @@ export default function StockPage() {
         <div className="rounded-3xl bg-white p-6 shadow-sm space-y-3">
           <h2 className="text-2xl font-bold">Aktuální stav skladu</h2>
 
-          <div className="rounded-3xl bg-white p-6 shadow-sm space-y-3">
-            <h2 className="text-2xl font-bold">Historie skladu</h2>
 
-            {history.map((move) => {
-              const isIn = move.type === "IN";
-              const date = new Date(move.createdAt);
-
-              return (
-                <div
-                  key={move.id}
-                  className={`flex items-center justify-between rounded-2xl border p-4 ${isIn ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"
-                    }`}
-                >
-                  <div>
-                    <div className="text-xl font-semibold">
-                      {move.stockItem.name}
-                    </div>
-                    <div className="text-sm text-slate-500">
-                      {date.toLocaleDateString()} {date.toLocaleTimeString()}
-                    </div>
-                  </div>
-
-                  <div
-                    className={`text-xl font-bold ${isIn ? "text-green-700" : "text-red-700"
-                      }`}
-                  >
-                    {isIn ? "+" : "-"} {move.quantity} {move.stockItem.unit}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
 
           {items.map((item) => (
             <div
@@ -209,6 +189,8 @@ export default function StockPage() {
               </div>
             </div>
           ))}
+
+          
         </div>
       </div>
     </main>
