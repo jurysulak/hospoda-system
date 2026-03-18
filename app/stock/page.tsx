@@ -10,19 +10,36 @@ type StockItem = {
   isActive: boolean;
 };
 
+type StockMovement = {
+  id: number;
+  type: "IN" | "OUT";
+  quantity: number;
+  createdAt: string;
+  stockItem: {
+    id: number;
+    name: string;
+    unit: string;
+  };
+};
+
 export default function StockPage() {
   const [items, setItems] = useState<StockItem[]>([]);
   const [name, setName] = useState("");
   const [unit, setUnit] = useState("ks");
   const [quantity, setQuantity] = useState("");
+  const [history, setHistory] = useState<StockMovement[]>([]);
 
   async function loadItems() {
-    const res = await fetch("/api/stock", {
-      cache: "no-store",
-    });
+    const [itemsRes, historyRes] = await Promise.all([
+      fetch("/api/stock", { cache: "no-store" }),
+      fetch("/api/stock/history", { cache: "no-store" }),
+    ]);
 
-    const data = await res.json();
-    setItems(data);
+    const itemsData = await itemsRes.json();
+    const historyData = await historyRes.json();
+
+    setItems(itemsData);
+    setHistory(historyData);
   }
 
   useEffect(() => {
@@ -123,6 +140,39 @@ export default function StockPage() {
 
         <div className="rounded-3xl bg-white p-6 shadow-sm space-y-3">
           <h2 className="text-2xl font-bold">Aktuální stav skladu</h2>
+
+          <div className="rounded-3xl bg-white p-6 shadow-sm space-y-3">
+            <h2 className="text-2xl font-bold">Historie skladu</h2>
+
+            {history.map((move) => {
+              const isIn = move.type === "IN";
+              const date = new Date(move.createdAt);
+
+              return (
+                <div
+                  key={move.id}
+                  className={`flex items-center justify-between rounded-2xl border p-4 ${isIn ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"
+                    }`}
+                >
+                  <div>
+                    <div className="text-xl font-semibold">
+                      {move.stockItem.name}
+                    </div>
+                    <div className="text-sm text-slate-500">
+                      {date.toLocaleDateString()} {date.toLocaleTimeString()}
+                    </div>
+                  </div>
+
+                  <div
+                    className={`text-xl font-bold ${isIn ? "text-green-700" : "text-red-700"
+                      }`}
+                  >
+                    {isIn ? "+" : "-"} {move.quantity} {move.stockItem.unit}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
           {items.map((item) => (
             <div
