@@ -63,3 +63,26 @@ model Payment {
 
   order Order @relation(fields: [orderId], references: [id])
 }
+
+model StockItem {
+  id        Int             @id @default(autoincrement())
+  name      String
+  unit      String          @default("ks")
+  quantity  Float           @default(0)
+  isActive  Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  movements StockMovement[]
+}
+
+model StockMovement {
+  id          Int      @id @default(autoincrement())
+  stockItemId Int
+  type        String
+  quantity    Float
+  note        String?
+  createdAt   DateTime @default(now())
+
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id])
+}
