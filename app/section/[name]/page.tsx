@@ -42,11 +42,17 @@ export default async function SectionPage({
     };
   });
 
-  const sectionLabel = name === "vnitrek" ? "Vnitřek" : "Zahrádka";
+  const sectionLabel =
+    name === "vnitrek"
+      ? "Vnitřek"
+      : name === "zahradka"
+        ? "Zahrádka"
+        : "Salónek";
 
   const filteredTables = mappedTables.filter((table) => {
     if (name === "vnitrek") return table.section === "Vnitřek";
     if (name === "zahradka") return table.section === "Zahrádka";
+    if (name === "salonek") return table.section === "Salónek";
     return false;
   });
 
@@ -79,21 +85,19 @@ export default async function SectionPage({
               <a
                 key={table.id}
                 href={`/tables/${table.id}`}
-                className={`rounded-3xl border-2 p-5 shadow-sm transition active:scale-[0.99] ${
-                  isFree
-                    ? "border-green-400 bg-green-100"
-                    : "border-red-400 bg-red-100"
-                }`}
+                className={`rounded-3xl border-2 p-5 shadow-sm transition active:scale-[0.99] ${isFree
+                  ? "border-green-400 bg-green-100"
+                  : "border-red-400 bg-red-100"
+                  }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-2xl font-bold">{table.name}</div>
                     <div
-                      className={`mt-2 inline-flex rounded-full px-3 py-1 text-sm font-semibold ${
-                        isFree
-                          ? "bg-green-200 text-green-900"
-                          : "bg-red-200 text-red-900"
-                      }`}
+                      className={`mt-2 inline-flex rounded-full px-3 py-1 text-sm font-semibold ${isFree
+                        ? "bg-green-200 text-green-900"
+                        : "bg-red-200 text-red-900"
+                        }`}
                     >
                       {isFree ? "Volný" : "Obsazený"}
                     </div>

@@ -9,7 +9,7 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-3">
           <a
             href="/section/vnitrek"
             className="flex min-h-[220px] items-center justify-center rounded-3xl border-2 border-blue-300 bg-blue-100 p-8 text-center text-4xl font-bold shadow-sm transition active:scale-[0.99]"
@@ -22,6 +22,13 @@ export default function Home() {
             className="flex min-h-[220px] items-center justify-center rounded-3xl border-2 border-green-300 bg-green-100 p-8 text-center text-4xl font-bold shadow-sm transition active:scale-[0.99]"
           >
             Zahrádka
+          </a>
+
+          <a
+            href="/section/salonek"
+            className="flex min-h-[220px] items-center justify-center rounded-3xl border-2 border-purple-300 bg-purple-100 p-8 text-center text-4xl font-bold shadow-sm transition active:scale-[0.99]"
+          >
+            Salónek
           </a>
         </div>
 
