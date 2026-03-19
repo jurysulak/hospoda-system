@@ -55,9 +55,14 @@ export default async function PaymentsPage() {
                     </div>
 
                     <div className="text-sm text-slate-500">
-                      {date.toLocaleTimeString()}
+                      {date.toLocaleDateString("cs-CZ")}
+                    </div>
+                    <div className="text-sm text-slate-500">
+                      {date.toLocaleTimeString("cs-CZ")}
                     </div>
                   </div>
+
+
 
                   <div className="text-2xl font-bold">
                     {payment.amount} Kč
