@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 export default async function StockHistoryPage() {
-  const history = await prisma.stockMovement.findMany({
+  const history: any[] = await prisma.stockMovement.findMany({
     orderBy: {
       createdAt: "desc",
     },
@@ -17,7 +17,7 @@ export default async function StockHistoryPage() {
       <div className="mx-auto max-w-5xl space-y-6">
         <a
           href="/stock"
-          className="inline-flex rounded-2xl bg-white px-4 py-3 text-base font-medium shadow-sm"
+          className="inline-flex rounded-2xl bg-white px-4 py-3 text-base font-medium shadow-sm hover:bg-slate-50 transition"
         >
           ← Zpět na sklad
         </a>
@@ -30,7 +30,7 @@ export default async function StockHistoryPage() {
         </div>
 
         <div className="rounded-3xl bg-white p-6 shadow-sm space-y-3">
-          {history.map((move) => {
+          {history.map((move: any) => {
             const isIn = move.type === "IN";
             const date = new Date(move.createdAt);
 
@@ -45,7 +45,7 @@ export default async function StockHistoryPage() {
               >
                 <div>
                   <div className="text-xl font-semibold">
-                    {move.stockItem.name}
+                    {move.stockItem?.name ?? "Neznámá položka"}
                   </div>
                   <div className="text-sm text-slate-500">
                     {date.toLocaleDateString()} {date.toLocaleTimeString()}
@@ -57,7 +57,7 @@ export default async function StockHistoryPage() {
                     isIn ? "text-green-700" : "text-red-700"
                   }`}
                 >
-                  {isIn ? "+" : "-"} {move.quantity} {move.stockItem.unit}
+                  {isIn ? "+" : "-"} {move.quantity} {move.stockItem?.unit ?? "ks"}
                 </div>
               </div>
             );
