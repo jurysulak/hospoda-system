@@ -6,51 +6,74 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// -------------------------------------------------------------
+// STOLY A PROSTOR
+// -------------------------------------------------------------
+// prisma/schema.prisma
+
 model Table {
   id        Int      @id @default(autoincrement())
-  name      String
+  name      String   // Název stolu (např. "Box 1", "TV levá")
   section   String   @default("Vnitřek")
-  status    String   @default("open")
+  status    String   @default("open") // "open" / "free" apod.
+  
+  // Pozice a rozměry pro vizuální mapu půdorysu (v pixelech)
+  posX      Int      @default(0)
+  posY      Int      @default(0)
+  width     Int      @default(110)
+  height    Int      @default(80)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   orders    Order[]
 }
 
+// -------------------------------------------------------------
+// JÍDELNÍ & NÁPOJOVÝ LÍSTEK
+// -------------------------------------------------------------
 model Product {
-  id        Int      @id @default(autoincrement())
-  name      String
-  category  String
-  price     Int
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  name        String
+  category    String   // např. "Pivo", "Nealko", "Jídlo"
+  price       Int      // cena v celých jednotkách (např. CZK)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orderItems  OrderItem[]
+  recipeItems ProductRecipe[] // Receptura: z jakých surovin se skládá
 }
 
+// -------------------------------------------------------------
+// ÚČTY A OBJEDNÁVKY
+// -------------------------------------------------------------
 model Order {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   tableId   Int
-  status    String   @default("open")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  status    String    @default("open") // "open", "paid", "cancelled"
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   closedAt  DateTime?
 
-  table    Table      @relation(fields: [tableId], references: [id])
-  items    OrderItem[]
-  payments Payment[]
+  table          Table           @relation(fields: [tableId], references: [id])
+  items          OrderItem[]
+  payments       Payment[]
+  stockMovements StockMovement[] // Audit odpisů pro tento účet
 }
 
 model OrderItem {
   id          Int      @id @default(autoincrement())
   orderId     Int
   productId   Int?
-  productName String
-  unitPrice   Int
+  productName String   // Historická záloha názvu v momentě prodeje
+  unitPrice   Int      // Historická záloha jednotkové ceny
   quantity    Int
-  payerName   String?
+  payerName   String?  // Užitečné pro rozpočítání účtu mezi hosty
   createdAt   DateTime @default(now())
 
-  order Order @relation(fields: [orderId], references: [id])
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 }
 
 model Payment {
@@ -58,31 +81,52 @@ model Payment {
   orderId       Int
   payerName     String?
   amount        Int
-  paymentMethod String?
+  paymentMethod String?  // "cash", "card", "voucher"
   createdAt     DateTime @default(now())
 
-  order Order @relation(fields: [orderId], references: [id])
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
 
+// -------------------------------------------------------------
+// SKLADOVÉ HOSPODÁŘSTVÍ
+// -------------------------------------------------------------
 model StockItem {
-  id        Int             @id @default(autoincrement())
-  name      String
-  unit      String          @default("ks")
-  quantity  Float           @default(0)
-  isActive  Boolean         @default(true)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  id          Int             @id @default(autoincrement())
+  name        String          // např. "Radegast 12 sud", "Kofola sirup"
+  unit        String          @default("ks") // "ks", "l", "kg"
+  quantity    Float           @default(0)
+  minQuantity Float           @default(0)   // Upozornění na docházející zásoby
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
-  movements StockMovement[]
+  movements   StockMovement[]
+  recipes     ProductRecipe[]
+}
+
+// Receptura spojuje prodejní artikl se surovinou na skladě
+// Příklad: 1x Velké Pivo = odpis 0.5 jednotky ze sudu
+model ProductRecipe {
+  id          Int       @id @default(autoincrement())
+  productId   Int
+  stockItemId Int
+  amount      Float     // Množství suroviny na 1 prodejní jednotku
+
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, stockItemId])
 }
 
 model StockMovement {
-  id          Int      @id @default(autoincrement())
+  id          Int        @id @default(autoincrement())
   stockItemId Int
-  type        String
-  quantity    Float
+  orderId     Int?       // Volitelná vazba na účet při automatickém odpisu
+  type        String     // "sale" (prodej), "restock" (naskladnění), "waste" (odpis/ztráta)
+  quantity    Float      // Kladné číslo pro naskladnění, záporné pro odpis
   note        String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime   @default(now())
 
-  stockItem   StockItem @relation(fields: [stockItemId], references: [id])
+  stockItem   StockItem  @relation(fields: [stockItemId], references: [id])
+  order       Order?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
 }

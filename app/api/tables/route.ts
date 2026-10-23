@@ -1,39 +1,44 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
+// Načtení všech stolů
 export async function GET() {
   const tables = await prisma.table.findMany({
     orderBy: { id: "asc" },
     include: {
       orders: {
         where: { status: "open" },
-        include: {
-          items: true,
-        },
+        include: { items: true },
       },
     },
   });
+  return NextResponse.json(tables);
+}
 
-  const result = tables.map((table: typeof tables[number]) => {
-    const openOrder = table.orders[0];
-    const items = openOrder?.items ?? [];
+// Vytvoření nového stolu přímo z aplikace
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { name, section = "Vnitřek", posX = 40, posY = 40, width = 110, height = 80 } = body;
 
-    const total = items.reduce(
-      (sum, item) => sum + item.unitPrice * item.quantity,
-      0
-    );
+    if (!name) {
+      return NextResponse.json({ error: "Název stolu je povinný" }, { status: 400 });
+    }
 
-    const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+    const newTable = await prisma.table.create({
+      data: {
+        name,
+        section,
+        posX: Number(posX),
+        posY: Number(posY),
+        width: Number(width),
+        height: Number(height),
+        status: "open",
+      },
+    });
 
-    return {
-      id: table.id,
-      name: table.name,
-      section: table.section,
-      status: itemCount > 0 ? "occupied" : "free",
-      total,
-      itemCount,
-    };
-  });
-
-  return NextResponse.json(result);
+    return NextResponse.json(newTable, { status: 201 });
+  } catch (error) {
+    return NextResponse.json({ error: "Chyba při vytváření stolu" }, { status: 500 });
+  }
 }
