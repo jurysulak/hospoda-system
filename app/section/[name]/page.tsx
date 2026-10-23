@@ -30,21 +30,21 @@ export default async function SectionPage({
       : "Salónek";
 
   const filteredTables = tables
-    .filter((table) => {
+    .filter((table: any) => {
       if (name === "vnitrek") return table.section === "Vnitřek";
       if (name === "zahradka") return table.section === "Zahrádka";
       if (name === "salonek") return table.section === "Salónek";
       return false;
     })
-    .map((table) => {
-      const openOrder = table.orders[0];
+    .map((table: any) => {
+      const openOrder = table.orders?.[0];
       const items = openOrder?.items ?? [];
 
       const total = items.reduce(
-        (sum, item) => sum + item.unitPrice * item.quantity,
+        (sum: number, item: any) => sum + item.unitPrice * item.quantity,
         0
       );
-      const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+      const itemCount = items.reduce((sum: number, item: any) => sum + item.quantity, 0);
 
       return {
         id: table.id,
@@ -85,7 +85,7 @@ export default async function SectionPage({
           </p>
         </div>
 
-        {/* Interaktivní plátno s Drag & Drop a přidáváním stolů */}
+        {/* Interaktivní mapa stolů */}
         <RoomMap
           initialTables={filteredTables}
           sectionName={name}
