@@ -44,7 +44,7 @@ export default async function SummaryPage() {
     },
   });
 
-  const totalAmount = payments.reduce((sum, payment) => sum + payment.amount, 0);
+  const totalAmount = payments.reduce((sum: number, payment: any) => sum + payment.amount, 0);
   const paymentCount = payments.length;
 
   const byTableMap: Record<string, number> = {};
