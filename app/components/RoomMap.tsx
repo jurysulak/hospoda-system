@@ -62,8 +62,8 @@ export default function RoomMap({
           section: sectionLabel,
           posX: 30,
           posY: 30,
-          width: 100,
-          height: 70,
+          width: 110,
+          height: 75,
         }),
       });
 
@@ -121,7 +121,7 @@ export default function RoomMap({
     };
   };
 
-  // 4. Pohyb
+  // 4. Pohyb / změna velikosti
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!activeAction || activeId === null || !floorRef.current) return;
 
@@ -200,58 +200,48 @@ export default function RoomMap({
     }
   };
 
-  const isZahradka = sectionLabel === "Zahrádka";
-
   return (
-    <div className="space-y-4">
-      {/* Ovládací lišta */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-3 shadow-sm">
+    <div className="flex-1 flex flex-col min-h-0 space-y-2 overflow-hidden">
+      {/* Kompaktní horní ovládací lišta */}
+      <div className="flex items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 shadow-xs shrink-0">
         <button
           type="button"
           onClick={() => setIsEditMode(!isEditMode)}
-          className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+          className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
             isEditMode
               ? "bg-amber-600 text-white hover:bg-amber-700 shadow"
               : "bg-slate-800 text-white hover:bg-slate-700"
           }`}
         >
-          {isEditMode ? "✓ Dokončit úpravy" : "⚙ Upravit rozestavení a velikosti"}
+          {isEditMode ? "✓ Dokončit úpravy" : "⚙ Upravit rozestavení"}
         </button>
 
         {isEditMode && (
-          <form onSubmit={handleAddTable} className="flex items-center gap-2">
+          <form onSubmit={handleAddTable} className="flex items-center gap-1.5">
             <input
               type="text"
               placeholder="Název stolu"
               value={newTableName}
               onChange={(e) => setNewTableName(e.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
             <button
               type="submit"
-              className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-700"
+              className="rounded-lg bg-green-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-green-700 cursor-pointer"
             >
-              + Přidat stůl
+              + Přidat
             </button>
           </form>
         )}
       </div>
 
-      {/* Plátno mapy */}
-      <div
-        className={`mx-auto rounded-2xl border border-slate-300 bg-white p-2 shadow-sm ${
-          isZahradka ? "max-w-2xl" : "w-full"
-        }`}
-      >
+      {/* Jednotné širokoúhlé plátno bez scrollování */}
+      <div className="w-full flex-1 min-h-0 rounded-2xl border border-slate-300 bg-white p-2 shadow-xs overflow-hidden">
         <div
           ref={floorRef}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          className={`relative w-full rounded-xl select-none overflow-hidden transition-all ${
-            isZahradka
-              ? "aspect-[3/4] min-h-[680px]"
-              : "aspect-[16/7] md:aspect-[16/8]"
-          } ${
+          className={`relative w-full h-full rounded-xl select-none overflow-hidden transition-all ${
             isEditMode
               ? "bg-[radial-gradient(#94a3b8_1px,transparent_1px)] [background-size:15px_15px] bg-slate-100 border-2 border-dashed border-amber-400"
               : "bg-slate-50 border border-slate-200"
@@ -272,7 +262,7 @@ export default function RoomMap({
                   height: `${table.height}px`,
                   touchAction: "none",
                 }}
-                className={`flex flex-col justify-between rounded-xl border-2 p-2 shadow-sm ${
+                className={`flex flex-col justify-between rounded-xl border-2 p-1.5 shadow-xs ${
                   isEditMode
                     ? "cursor-grab active:cursor-grabbing border-amber-500 bg-amber-50/95"
                     : isFree
@@ -291,8 +281,8 @@ export default function RoomMap({
                       </span>
                       <span className="text-[10px]">{isFree ? "🟢" : "🔴"}</span>
                     </div>
-                    <div className="flex items-end justify-between text-[11px]">
-                      <span className="font-medium text-slate-600">
+                    <div className="flex items-end justify-between text-[11px] leading-tight">
+                      <span className="font-medium text-slate-500">
                         {table.itemCount} ks
                       </span>
                       <span className="font-bold text-slate-900">
