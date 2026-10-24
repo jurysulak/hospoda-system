@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import RoomMap from "@/app/components/RoomMap";
+import Link from "next/link";
 
 export default async function SectionPage({
   params,
@@ -44,7 +45,10 @@ export default async function SectionPage({
         (sum: number, item: any) => sum + item.unitPrice * item.quantity,
         0
       );
-      const itemCount = items.reduce((sum: number, item: any) => sum + item.quantity, 0);
+      const itemCount = items.reduce(
+        (sum: number, item: any) => sum + item.quantity,
+        0
+      );
 
       return {
         id: table.id,
@@ -61,36 +65,35 @@ export default async function SectionPage({
     });
 
   return (
-    <main className="min-h-screen bg-slate-200 p-4 md:p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        {/* Horní navigační lišta */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <a
-            href="/"
-            className="rounded-2xl bg-white px-5 py-4 text-lg font-semibold shadow-sm transition hover:bg-slate-50"
-          >
-            ← Zpět
-          </a>
-
-          <div className="rounded-2xl bg-white px-5 py-4 text-lg font-semibold shadow-sm">
-            Celkem stolů: {filteredTables.length}
+    <main className="h-screen max-h-screen bg-slate-200 p-2 md:p-3 flex flex-col overflow-hidden select-none">
+      <div className="mx-auto w-full max-w-7xl flex flex-col flex-1 min-h-0 space-y-2">
+        {/* Jedna kompaktní horní lišta – nezabírá vertikální místo */}
+        <header className="flex items-center justify-between gap-3 rounded-2xl bg-white px-4 py-2 shadow-xs shrink-0">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="flex items-center gap-1 rounded-xl bg-slate-100 hover:bg-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 transition"
+            >
+              ← Zpět
+            </Link>
+            <h1 className="text-xl font-black text-slate-900 tracking-tight">
+              {sectionLabel}
+            </h1>
           </div>
-        </div>
 
-        {/* Hlavička sekce */}
-        <div className="rounded-3xl bg-white p-6 shadow-sm">
-          <h1 className="text-4xl font-bold">{sectionLabel}</h1>
-          <p className="mt-2 text-lg text-slate-600">
-            Kliknutím na stůl otevřeš detail účtu
-          </p>
-        </div>
+          <div className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl">
+            Stoly: {filteredTables.length}
+          </div>
+        </header>
 
-        {/* Interaktivní mapa stolů */}
-        <RoomMap
-          initialTables={filteredTables}
-          sectionName={name}
-          sectionLabel={sectionLabel}
-        />
+        {/* Interaktivní mapa – vyplní 100 % zbývající výšky bez scrollování */}
+        <div className="flex-1 min-h-0 flex flex-col">
+          <RoomMap
+            initialTables={filteredTables}
+            sectionName={name}
+            sectionLabel={sectionLabel}
+          />
+        </div>
       </div>
     </main>
   );
