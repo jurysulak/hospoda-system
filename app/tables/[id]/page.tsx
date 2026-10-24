@@ -26,6 +26,11 @@ type TableData = {
   }[];
 };
 
+type SimpleTable = {
+  id: number;
+  name: string;
+};
+
 export default function TableDetail({
   params,
 }: {
@@ -33,14 +38,21 @@ export default function TableDetail({
 }) {
   const [table, setTable] = useState<TableData | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [allTables, setAllTables] = useState<SimpleTable[]>([]);
   const [tableId, setTableId] = useState<string>("");
   const [isPayMode, setIsPayMode] = useState(false);
   const [selectedQuantities, setSelectedQuantities] = useState<Record<number, number>>({});
   const [selectedCategory, setSelectedCategory] = useState<string>("Vše");
   const [search, setSearch] = useState("");
 
+  // Stavy pro platbu
   const [isPaying, setIsPaying] = useState(false);
   const [showPayModal, setShowPayModal] = useState(false);
+
+  // Stavy pro přesun / sloučení
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [selectedTargetTableId, setSelectedTargetTableId] = useState<number | null>(null);
+  const [isTransferring, setIsTransferring] = useState(false);
 
   useEffect(() => {
     params.then(({ id }) => {
@@ -49,6 +61,7 @@ export default function TableDetail({
   }, [params]);
 
   async function loadData(id: string) {
+    // 1. Načtení produktů
     try {
       const productsRes = await fetch("/api/products", { cache: "no-store" });
       if (productsRes.ok) {
@@ -61,6 +74,7 @@ export default function TableDetail({
       console.error("Chyba při stahování produktů:", e);
     }
 
+    // 2. Načtení stolu
     try {
       const tableRes = await fetch(`/api/tables/${id}`, { cache: "no-store" });
       if (tableRes.ok) {
@@ -69,6 +83,19 @@ export default function TableDetail({
       }
     } catch (e) {
       console.error("Chyba při stahování stolu:", e);
+    }
+
+    // 3. Načtení všech stolů (pro přesun / sloučení)
+    try {
+      const allTablesRes = await fetch("/api/tables", { cache: "no-store" });
+      if (allTablesRes.ok) {
+        const tablesData = await allTablesRes.json();
+        if (Array.isArray(tablesData)) {
+          setAllTables(tablesData);
+        }
+      }
+    } catch (e) {
+      console.error("Chyba při stahování seznamu stolů:", e);
     }
 
     setSelectedQuantities({});
@@ -81,7 +108,7 @@ export default function TableDetail({
     }
   }, [tableId]);
 
-  // Přidání z katalogu
+  // Přidání produktu z katalogu
   async function addProduct(productId: number) {
     await fetch(`/api/tables/${tableId}/items`, {
       method: "POST",
@@ -134,6 +161,7 @@ export default function TableDetail({
     });
   }
 
+  // Odeslání platby
   async function handlePay(method: "CASH" | "CARD") {
     try {
       setIsPaying(true);
@@ -162,6 +190,33 @@ export default function TableDetail({
       alert("Chyba spojení při platbě");
     } finally {
       setIsPaying(false);
+    }
+  }
+
+  // Přesun / sloučení stolu
+  async function handleTransfer() {
+    if (!selectedTargetTableId) return;
+
+    try {
+      setIsTransferring(true);
+      const res = await fetch(`/api/tables/${tableId}/transfer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetTableId: selectedTargetTableId }),
+      });
+
+      if (res.ok) {
+        setShowTransferModal(false);
+        // Přesměruje rovnou na cílový stůl
+        window.location.href = `/tables/${selectedTargetTableId}`;
+      } else {
+        const err = await res.json();
+        alert(err.error || "Přesun se nezdařil");
+      }
+    } catch (e) {
+      alert("Chyba spojení při přesunu stolu");
+    } finally {
+      setIsTransferring(false);
     }
   }
 
@@ -227,56 +282,68 @@ export default function TableDetail({
           <button
             onClick={() => setShowPayModal(true)}
             disabled={items.length === 0}
-            className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-40 text-white font-bold px-4 py-2 rounded-xl text-sm shadow transition"
+            className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-40 text-white font-bold px-4 py-2 rounded-xl text-sm shadow transition cursor-pointer"
           >
             Zaplatit
           </button>
         </div>
       </header>
 
-      {/* Tělo aplikace: 2 nezávislé sloupce (Účet vs Katalog) */}
+      {/* Tělo: 2 sloupce (Účet vs Nabídka) */}
       <div className="flex-1 grid grid-cols-1 md:grid-cols-[380px_1fr] lg:grid-cols-[430px_1fr] overflow-hidden">
         
         {/* LEVÝ PANEL: Účet stolu */}
         <section className="bg-white border-r border-slate-200 flex flex-col h-full overflow-hidden">
           {/* Akční lišta účtu */}
-          <div className="p-3 border-b border-slate-100 flex items-center justify-between gap-2 shrink-0 bg-slate-50/50">
+          <div className="p-3 border-b border-slate-100 flex items-center justify-between gap-1.5 shrink-0 bg-slate-50/50">
             <span className="font-bold text-slate-800 text-sm">
               Účet ({items.reduce((s, i) => s + i.quantity, 0)} ks)
             </span>
             <div className="flex gap-1.5">
+              {/* Tlačítko přesunu a sloučení */}
+              <button
+                onClick={() => {
+                  setSelectedTargetTableId(null);
+                  setShowTransferModal(true);
+                }}
+                disabled={items.length === 0}
+                className="text-xs font-semibold px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 transition cursor-pointer"
+              >
+                Přesunout
+              </button>
+
               <button
                 onClick={() => {
                   setIsPayMode(!isPayMode);
                   setSelectedQuantities({});
                 }}
                 disabled={items.length === 0}
-                className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition ${
+                className={`text-xs font-semibold px-2 py-1.5 rounded-lg border transition cursor-pointer ${
                   isPayMode
                     ? "bg-amber-100 border-amber-300 text-amber-900"
                     : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
                 } disabled:opacity-40`}
               >
-                {isPayMode ? "Zrušit dělení" : "Dělit účet"}
+                {isPayMode ? "Zrušit" : "Dělit"}
               </button>
 
               <button
                 onClick={clearTable}
                 disabled={items.length === 0}
-                className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-40 transition"
+                className="text-xs font-semibold px-2 py-1.5 rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-40 transition cursor-pointer"
               >
                 Vyčistit
               </button>
             </div>
           </div>
 
-          {/* Scrollovatelný seznam položek na účtu */}
+          {/* Seznam položek */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
             {items.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center text-slate-400 p-6">
                 <span className="text-4xl mb-2">🍽️</span>
                 <p className="font-medium text-sm">Stůl je prázdný.</p>
-                <p className="text-xs text-slate-400 mt-1">Vyberte položky z nabídky vpravo.</p>
+                <p className="text-xs text-slate-400 mt-1">Vyber položky z nabídky vpravo.</p>
               </div>
             ) : (
               items.map((item) => {
@@ -301,31 +368,26 @@ export default function TableDetail({
                         </div>
                       </div>
 
-                      {/* Tlačítka pro rychlou editaci / přidání */}
                       {!isPayMode ? (
                         <div className="flex items-center gap-1.5 shrink-0">
-                          {/* Mínusko */}
                           <button
                             onClick={() => removeOneItem(item.id)}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 active:scale-90 text-slate-800 font-bold text-base transition"
+                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 active:scale-90 text-slate-800 font-bold text-base transition cursor-pointer"
                           >
                             −
                           </button>
 
-                          {/* Počet kusů */}
                           <span className="w-7 text-center font-black text-slate-900 text-sm">
                             {item.quantity}×
                           </span>
 
-                          {/* NOVÉ RYCHLÉ PLUSKO */}
                           <button
                             onClick={() => addOneItem(item.id)}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-900 hover:bg-slate-800 active:scale-90 text-white font-bold text-base transition"
+                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-900 hover:bg-slate-800 active:scale-90 text-white font-bold text-base transition cursor-pointer"
                           >
                             +
                           </button>
 
-                          {/* Cena celkem za položku */}
                           <div className="w-16 text-right font-bold text-slate-900 text-sm">
                             {item.quantity * item.unitPrice} Kč
                           </div>
@@ -334,7 +396,7 @@ export default function TableDetail({
                         <div className="flex items-center gap-1.5 shrink-0">
                           <button
                             onClick={() => decreasePayQuantity(item.id)}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-base"
+                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-base cursor-pointer"
                           >
                             −
                           </button>
@@ -343,7 +405,7 @@ export default function TableDetail({
                           </span>
                           <button
                             onClick={() => increasePayQuantity(item.id, item.quantity)}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-900 text-white font-bold text-base"
+                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-900 text-white font-bold text-base cursor-pointer"
                           >
                             +
                           </button>
@@ -366,7 +428,7 @@ export default function TableDetail({
                 </div>
                 <button
                   onClick={() => setShowPayModal(true)}
-                  className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold px-4 py-2.5 rounded-xl text-sm shadow transition"
+                  className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold px-4 py-2.5 rounded-xl text-sm shadow transition cursor-pointer"
                 >
                   Zaplatit část ({selectedTotal} Kč)
                 </button>
@@ -380,7 +442,7 @@ export default function TableDetail({
                 <button
                   onClick={() => setShowPayModal(true)}
                   disabled={items.length === 0}
-                  className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-40 text-white font-bold px-5 py-2.5 rounded-xl text-sm shadow transition"
+                  className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-40 text-white font-bold px-5 py-2.5 rounded-xl text-sm shadow transition cursor-pointer"
                 >
                   Zaplatit stůl
                 </button>
@@ -389,10 +451,8 @@ export default function TableDetail({
           </div>
         </section>
 
-        {/* PRAVÝ PANEL: Katalog produktů optimalizovaný pro dotyk */}
+        {/* PRAVÝ PANEL: Katalog produktů */}
         <section className="flex flex-col h-full overflow-hidden bg-slate-50">
-          
-          {/* Vyhledávání a kategorie */}
           <div className="p-3 bg-white border-b border-slate-200 space-y-2 shrink-0 shadow-2xs">
             <input
               type="text"
@@ -402,7 +462,6 @@ export default function TableDetail({
               className="w-full bg-slate-100 rounded-xl px-3.5 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900"
             />
 
-            {/* Vodorovný posuvník kategorií pro tablety */}
             <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
               {categories.map((category) => (
                 <button
@@ -420,7 +479,6 @@ export default function TableDetail({
             </div>
           </div>
 
-          {/* Mřížka tlačítek produktů s vlastním scrollováním */}
           <div className="flex-1 overflow-y-auto p-3">
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
               {filteredProducts.map((product) => (
@@ -447,7 +505,7 @@ export default function TableDetail({
         </section>
       </div>
 
-      {/* Modální okno pro volbu platby */}
+      {/* MODAL 1: Výběr platby */}
       {showPayModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
           <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
@@ -477,6 +535,54 @@ export default function TableDetail({
                 className="mt-1 rounded-2xl bg-slate-100 hover:bg-slate-200 py-3 text-sm font-semibold text-slate-600 transition cursor-pointer"
               >
                 Zpět
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: Přesun / sloučení stolu */}
+      {showTransferModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-2xl font-black text-slate-900">Přesunout stůl</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Vyber cílový stůl, na který chceš převést účet:
+            </p>
+
+            <div className="mt-4 max-h-56 overflow-y-auto space-y-2 pr-1">
+              {allTables
+                .filter((t) => t.id !== Number(tableId))
+                .map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setSelectedTargetTableId(t.id)}
+                    className={`w-full p-3 rounded-2xl border text-left font-bold text-sm transition cursor-pointer flex items-center justify-between ${
+                      selectedTargetTableId === t.id
+                        ? "border-slate-900 bg-slate-900 text-white"
+                        : "border-slate-200 bg-slate-50 text-slate-800 hover:bg-slate-100"
+                    }`}
+                  >
+                    <span>{t.name}</span>
+                    {selectedTargetTableId === t.id && <span>✓</span>}
+                  </button>
+                ))}
+            </div>
+
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                onClick={handleTransfer}
+                disabled={!selectedTargetTableId || isTransferring}
+                className="w-full rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-95 py-3.5 text-base font-bold text-white shadow transition cursor-pointer disabled:opacity-50"
+              >
+                {isTransferring ? "Přesouvám..." : "Potvrdit přesun / sloučení"}
+              </button>
+              <button
+                onClick={() => setShowTransferModal(false)}
+                disabled={isTransferring}
+                className="w-full rounded-2xl bg-slate-100 hover:bg-slate-200 py-3 text-sm font-semibold text-slate-600 transition cursor-pointer"
+              >
+                Zrušit
               </button>
             </div>
           </div>
