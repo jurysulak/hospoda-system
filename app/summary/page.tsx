@@ -6,11 +6,12 @@ import Link from "next/link";
 export default async function SummaryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>;
+  searchParams?: Promise<{ date?: string }> | { date?: string };
 }) {
-  const { date: queryDate } = await searchParams;
+  const resolvedParams = searchParams ? await Promise.resolve(searchParams) : {};
+  const queryDate = resolvedParams.date;
 
-  // Výběr data (výchozí je dnešek)
+  // Výběr data (výchozí je dnešek v lokálním čase)
   const targetDate = queryDate ? new Date(queryDate) : new Date();
 
   const startOfDay = new Date(
@@ -33,41 +34,46 @@ export default async function SummaryPage({
     999
   );
 
-  // Načtení všech plateb za vybraný den včetně objednávek a položek
-  const payments: any[] = await prisma.payment.findMany({
-    where: {
-      createdAt: {
-        gte: startOfDay,
-        lte: endOfDay,
-      },
-    },
-    include: {
-      order: {
-        include: {
-          table: true,
-          items: true,
+  // Načtení plateb bezpečně s ošetřením chyb
+  let payments: any[] = [];
+  try {
+    payments = await prisma.payment.findMany({
+      where: {
+        createdAt: {
+          gte: startOfDay,
+          lte: endOfDay,
         },
       },
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+      include: {
+        order: {
+          include: {
+            table: true,
+            items: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  } catch (err) {
+    console.error("Chyba při dotazu na platby:", err);
+  }
 
-  // Základní metriky
+  // Celková částka a počet plateb
   const totalAmount = payments.reduce(
     (sum: number, p: any) => sum + (p.amount ?? 0),
     0
   );
   const paymentCount = payments.length;
 
-  // Rozpad podle metody (Hotově vs. Kartou)
+  // Rozpad Hotovost vs Karta
   const cashAmount = payments
-    .filter((p: any) => p.paymentMethod === "CASH" || !p.paymentMethod)
+    .filter((p: any) => !p.paymentMethod || p.paymentMethod.toUpperCase() === "CASH")
     .reduce((sum: number, p: any) => sum + (p.amount ?? 0), 0);
 
   const cardAmount = payments
-    .filter((p: any) => p.paymentMethod === "CARD")
+    .filter((p: any) => p.paymentMethod && p.paymentMethod.toUpperCase() === "CARD")
     .reduce((sum: number, p: any) => sum + (p.amount ?? 0), 0);
 
   // Souhrn podle stolů
@@ -85,7 +91,7 @@ export default async function SummaryPage({
     (a, b) => b[1].amount - a[1].amount
   );
 
-  // Souhrn podle prodaných položek
+  // Souhrn podle položek
   const itemsMap: Record<string, { qty: number; total: number }> = {};
   for (const payment of payments) {
     const items = payment.order?.items ?? [];
@@ -151,13 +157,6 @@ export default async function SummaryPage({
               {formattedDate}
             </p>
           </div>
-
-          <button
-            onClick={() => {}} // Využije browser print
-            className="print:hidden rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 text-xs font-bold shadow-xs transition cursor-pointer flex items-center gap-1.5"
-          >
-            🖨️ Vytisknout uzávěrku
-          </button>
         </div>
 
         {/* Hlavní karty – Celkem, Hotovost, Karta */}
@@ -214,10 +213,9 @@ export default async function SummaryPage({
           </div>
         </div>
 
-        {/* Spodní detail: TOP prodané produkty + Stoly + Historie */}
+        {/* Spodní detail: TOP položky + Tržba podle stolů + Poslední platby */}
         <div className="grid gap-4 lg:grid-cols-3">
-          
-          {/* 1. Nejprodávanější položky */}
+          {/* 1. Prodané položky */}
           <div className="rounded-3xl bg-white p-5 shadow-xs flex flex-col">
             <h2 className="text-base font-black text-slate-900 mb-3">
               🍺 Prodané položky
@@ -285,7 +283,9 @@ export default async function SummaryPage({
                     hour: "2-digit",
                     minute: "2-digit",
                   });
-                  const isCard = payment.paymentMethod === "CARD";
+                  const isCard =
+                    payment.paymentMethod &&
+                    payment.paymentMethod.toUpperCase() === "CARD";
 
                   return (
                     <div
@@ -316,7 +316,6 @@ export default async function SummaryPage({
               )}
             </div>
           </div>
-
         </div>
       </div>
     </main>
