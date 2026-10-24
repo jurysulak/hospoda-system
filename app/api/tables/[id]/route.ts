@@ -1,6 +1,49 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
+// Načtení konkrétního stolu včetně otevřeného účtu a jeho položek
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const tableId = Number(id);
+
+    if (isNaN(tableId)) {
+      return NextResponse.json({ error: "Neplatné ID stolu" }, { status: 400 });
+    }
+
+    const table = await prisma.table.findUnique({
+      where: { id: tableId },
+      include: {
+        orders: {
+          where: { status: "open" },
+          include: {
+            items: {
+              orderBy: { id: "asc" },
+            },
+          },
+        },
+      },
+    });
+
+    if (!table) {
+      return NextResponse.json({ error: "Stůl nenalezen" }, { status: 404 });
+    }
+
+    return NextResponse.json(table);
+  } catch (error) {
+    console.error("Chyba při načítání stolu:", error);
+    return NextResponse.json(
+      { error: "Chyba při načítání stolu" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
