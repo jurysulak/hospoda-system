@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import ReceiptPrintModal from "@/app/components/ReceiptPrintModal";
 
 type Product = {
   id: number;
@@ -67,6 +68,10 @@ export default function TableDetail({
   const [resTime, setResTime] = useState("");
   const [resPax, setResPax] = useState("");
   const [isSavingRes, setIsSavingRes] = useState(false);
+
+  // Stavy pro tisk bonu a účtenky
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [printMode, setPrintMode] = useState<"RECEIPT" | "KITCHEN">("RECEIPT");
 
   useEffect(() => {
     params.then(({ id }) => {
@@ -343,6 +348,33 @@ export default function TableDetail({
             <span className="text-xl font-extrabold text-slate-900 leading-tight">
               {total} Kč
             </span>
+          </div>
+
+          {/* Tlačítka tisku */}
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => {
+                setPrintMode("KITCHEN");
+                setShowPrintModal(true);
+              }}
+              disabled={items.length === 0}
+              className="rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40 transition cursor-pointer"
+              title="Tisk bonu do kuchyně / na bar"
+            >
+              👨‍🍳 Bon
+            </button>
+
+            <button
+              onClick={() => {
+                setPrintMode("RECEIPT");
+                setShowPrintModal(true);
+              }}
+              disabled={items.length === 0}
+              className="rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40 transition cursor-pointer"
+              title="Tisk účtenky pro hosta"
+            >
+              🧾 Účtenka
+            </button>
           </div>
 
           <button
@@ -750,6 +782,16 @@ export default function TableDetail({
           </div>
         </div>
       )}
+
+      {/* MODAL 4: Tisk bonu a účtenky */}
+      <ReceiptPrintModal
+        isOpen={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+        tableName={table?.name || `Stůl ${tableId}`}
+        items={items}
+        totalAmount={total}
+        mode={printMode}
+      />
     </main>
   );
 }
