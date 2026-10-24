@@ -21,18 +21,18 @@ export async function GET(req: Request) {
       },
     });
 
-    const formattedTables = tables.map((table) => {
+    const formattedTables = tables.map((table: any) => {
       const openOrder = table.orders?.[0];
       const items = openOrder?.items ?? [];
 
       const total = items.reduce(
-        (sum, item) => sum + item.unitPrice * item.quantity,
-        0
-      );
-      const itemCount = items.reduce(
-        (sum, item) => sum + item.quantity,
-        0
-      );
+      (sum: number, item: any) => sum + item.unitPrice * item.quantity,
+      0
+    );
+    const itemCount = items.reduce(
+      (sum: number, item: any) => sum + item.quantity,
+      0
+    );
 
       return {
         id: table.id,
