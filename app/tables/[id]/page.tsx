@@ -39,15 +39,19 @@ export default function TableDetail({
   const [selectedCategory, setSelectedCategory] = useState<string>("Vše");
   const [search, setSearch] = useState("");
 
+  // Stavy pro platební dialog
+  const [isPaying, setIsPaying] = useState(false);
+  const [showPayModal, setShowPayModal] = useState(false);
+
   useEffect(() => {
     params.then(({ id }) => {
       setTableId(id);
     });
   }, [params]);
 
- async function loadData(id: string) {
+  async function loadData(id: string) {
     try {
-      // 1. Samostatné načtení produktů (nespadne, když stůl neexistuje)
+      // 1. Samostatné načtení produktů
       const productsRes = await fetch("/api/products", { cache: "no-store" });
       if (productsRes.ok) {
         const productsData = await productsRes.json();
@@ -135,23 +139,38 @@ export default function TableDetail({
     });
   }
 
-  async function confirmPayment() {
-    const items = Object.entries(selectedQuantities).map(([itemId, quantity]) => ({
-      itemId: Number(itemId),
-      quantity,
-    }));
+  // Funkce pro odeslání platby na backend
+  async function handlePay(method: "CASH" | "CARD") {
+    try {
+      setIsPaying(true);
 
-    if (items.length === 0) return;
+      // Pokud je v režimu rozdělení vybrána jen část položek, pošleme vybrané
+      const selectedItemsList = Object.entries(selectedQuantities).map(([itemId, quantity]) => ({
+        itemId: Number(itemId),
+        quantity,
+      }));
 
-    await fetch(`/api/tables/${tableId}/pay`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ items }),
-    });
+      const res = await fetch(`/api/tables/${tableId}/pay`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paymentMethod: method,
+          items: selectedItemsList.length > 0 ? selectedItemsList : undefined,
+        }),
+      });
 
-    await loadData(tableId);
+      if (res.ok) {
+        setShowPayModal(false);
+        await loadData(tableId);
+      } else {
+        const err = await res.json();
+        alert(err.error || "Platba se nezdařila");
+      }
+    } catch (e) {
+      alert("Chyba spojení při platbě");
+    } finally {
+      setIsPaying(false);
+    }
   }
 
   const items = table?.orders?.[0]?.items ?? [];
@@ -179,13 +198,16 @@ export default function TableDetail({
     return sum + selectedQty * item.unitPrice;
   }, 0);
 
+  // Částka k zaplacení v okně: buď vybraná, nebo celý účet
+  const amountToPay = isPayMode && selectedTotal > 0 ? selectedTotal : total;
+
   return (
     <main className="min-h-screen bg-slate-200 p-4 md:p-6">
       <div className="mx-auto grid max-w-7xl gap-6 xl:grid-cols-[1.1fr_1fr]">
         <div className="space-y-6">
           <a
             href="/"
-            className="inline-flex rounded-2xl bg-white px-4 py-3 text-base font-medium shadow-sm"
+            className="inline-flex rounded-2xl bg-white px-4 py-3 text-base font-medium shadow-sm hover:bg-slate-50 transition"
           >
             ← Zpět na přehled
           </a>
@@ -203,19 +225,31 @@ export default function TableDetail({
               <h2 className="text-3xl font-bold">Účet stolu</h2>
 
               <div className="flex flex-wrap gap-3">
+                {/* Zaplatit celý účet najednou */}
+                <button
+                  onClick={() => setShowPayModal(true)}
+                  disabled={items.length === 0}
+                  className="rounded-2xl bg-slate-900 px-5 py-4 text-lg font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
+                >
+                  Zaplatit
+                </button>
+
+                {/* Rozdělit / platit po položkách */}
                 <button
                   onClick={() => {
                     setIsPayMode(!isPayMode);
                     setSelectedQuantities({});
                   }}
-                  className="rounded-2xl bg-slate-900 px-5 py-4 text-lg font-semibold text-white"
+                  disabled={items.length === 0}
+                  className="rounded-2xl bg-slate-100 px-5 py-4 text-lg font-semibold text-slate-800 transition hover:bg-slate-200 disabled:opacity-50 cursor-pointer"
                 >
-                  {isPayMode ? "Zrušit placení" : "Zaplatit"}
+                  {isPayMode ? "Zrušit výběr" : "Rozdělit účet"}
                 </button>
 
                 <button
                   onClick={clearTable}
-                  className="rounded-2xl bg-red-600 px-5 py-4 text-lg font-semibold text-white"
+                  disabled={items.length === 0}
+                  className="rounded-2xl bg-red-600 px-5 py-4 text-lg font-semibold text-white transition hover:bg-red-700 disabled:opacity-50 cursor-pointer"
                 >
                   Vyčistit stůl
                 </button>
@@ -250,7 +284,7 @@ export default function TableDetail({
                           {!isPayMode && (
                             <button
                               onClick={() => removeOneItem(item.id)}
-                              className="rounded-xl border bg-white px-4 py-3 text-2xl font-bold"
+                              className="rounded-xl border bg-white px-4 py-3 text-2xl font-bold cursor-pointer hover:bg-slate-100"
                             >
                               −
                             </button>
@@ -266,7 +300,7 @@ export default function TableDetail({
                         <div className="mt-4 flex items-center gap-3">
                           <button
                             onClick={() => decreasePayQuantity(item.id)}
-                            className="rounded-xl border bg-white px-5 py-3 text-2xl font-bold"
+                            className="rounded-xl border bg-white px-5 py-3 text-2xl font-bold cursor-pointer hover:bg-slate-100"
                           >
                             −
                           </button>
@@ -277,7 +311,7 @@ export default function TableDetail({
 
                           <button
                             onClick={() => increasePayQuantity(item.id, item.quantity)}
-                            className="rounded-xl border bg-white px-5 py-3 text-2xl font-bold"
+                            className="rounded-xl border bg-white px-5 py-3 text-2xl font-bold cursor-pointer hover:bg-slate-100"
                           >
                             +
                           </button>
@@ -289,6 +323,7 @@ export default function TableDetail({
               </div>
             )}
 
+            {/* Panel při vybraných položkách k zaplacení */}
             {isPayMode && items.length > 0 && (
               <div className="mt-6 rounded-3xl bg-slate-100 p-5">
                 <div className="text-2xl font-bold">
@@ -296,17 +331,18 @@ export default function TableDetail({
                 </div>
 
                 <button
-                  onClick={confirmPayment}
+                  onClick={() => setShowPayModal(true)}
                   disabled={selectedTotal === 0}
-                  className="mt-4 w-full rounded-2xl bg-green-600 px-5 py-4 text-xl font-bold text-white disabled:opacity-50"
+                  className="mt-4 w-full rounded-2xl bg-green-600 px-5 py-4 text-xl font-bold text-white transition hover:bg-green-700 disabled:opacity-50 cursor-pointer"
                 >
-                  Potvrdit zaplacení
+                  Zaplatit vybrané ({selectedTotal} Kč)
                 </button>
               </div>
             )}
           </div>
         </div>
 
+        {/* Pravý sloupec - Produkty */}
         <div className="rounded-3xl bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-3xl font-bold">Produkty</h2>
 
@@ -323,10 +359,10 @@ export default function TableDetail({
               <button
                 key={category}
                 onClick={() => setSelectedCategory(category)}
-                className={`rounded-2xl px-4 py-3 text-base font-semibold ${
+                className={`rounded-2xl px-4 py-3 text-base font-semibold cursor-pointer transition ${
                   selectedCategory === category
                     ? "bg-slate-900 text-white"
-                    : "bg-slate-100 text-slate-700"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                 }`}
               >
                 {category}
@@ -339,7 +375,7 @@ export default function TableDetail({
               <button
                 key={product.id}
                 onClick={() => addProduct(product.id)}
-                className="rounded-3xl border bg-slate-50 p-5 text-left transition active:scale-[0.99]"
+                className="rounded-3xl border bg-slate-50 p-5 text-left transition active:scale-[0.99] cursor-pointer hover:border-slate-400"
               >
                 <div className="text-xl font-bold">{product.name}</div>
                 <div className="mt-2 text-base text-slate-500">
@@ -351,6 +387,42 @@ export default function TableDetail({
           </div>
         </div>
       </div>
+
+      {/* Modální okno pro výběr metody platby */}
+      {showPayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+            <h3 className="text-2xl font-bold text-slate-900">Zvolit platbu</h3>
+            <p className="mt-2 text-base text-slate-600">
+              Částka k úhradě: <span className="font-bold text-slate-900 text-lg">{amountToPay} Kč</span>
+            </p>
+
+            <div className="mt-6 flex flex-col gap-3">
+              <button
+                onClick={() => handlePay("CASH")}
+                disabled={isPaying}
+                className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-4 text-lg font-bold text-white shadow transition hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+              >
+                💵 Hotově
+              </button>
+              <button
+                onClick={() => handlePay("CARD")}
+                disabled={isPaying}
+                className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 py-4 text-lg font-bold text-white shadow transition hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
+              >
+                💳 Kartou
+              </button>
+              <button
+                onClick={() => setShowPayModal(false)}
+                disabled={isPaying}
+                className="mt-2 rounded-2xl bg-slate-100 py-3 text-base font-semibold text-slate-600 hover:bg-slate-200 cursor-pointer"
+              >
+                Zpět / Zrušit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
