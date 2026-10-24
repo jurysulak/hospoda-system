@@ -1,71 +1,93 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
-export async function GET() {
-  const now = new Date();
+export const dynamic = "force-dynamic";
 
-  const startOfDay = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-    0,
-    0,
-    0,
-    0
-  );
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const dateParam = searchParams.get("date"); // formát YYYY-MM-DD
 
-  const endOfDay = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-    23,
-    59,
-    59,
-    999
-  );
+    // Pokud datum není zadáno, vezme se dnešek
+    const targetDate = dateParam ? new Date(dateParam) : new Date();
 
-  const payments = await prisma.payment.findMany({
-    where: {
-      createdAt: {
-        gte: startOfDay,
-        lte: endOfDay,
-      },
-    },
-    include: {
-      order: {
-        include: {
-          table: true,
+    const startOfDay = new Date(
+      targetDate.getFullYear(),
+      targetDate.getMonth(),
+      targetDate.getDate(),
+      0,
+      0,
+      0,
+      0
+    );
+    const endOfDay = new Date(
+      targetDate.getFullYear(),
+      targetDate.getMonth(),
+      targetDate.getDate(),
+      23,
+      59,
+      59,
+      999
+    );
+
+    const payments = await prisma.payment.findMany({
+      where: {
+        createdAt: {
+          gte: startOfDay,
+          lte: endOfDay,
         },
       },
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+      include: {
+        order: {
+          include: {
+            table: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
 
-  const totalAmount = payments.reduce(
-    (sum: number, payment: any) => sum + payment.amount,
-    0
-  );
+    // Výpočty souhrnů
+    let cashTotal = 0;
+    let cardTotal = 0;
+    let totalAmount = 0;
+    const byTableMap: Record<string, number> = {};
 
-  const paymentCount = payments.length;
+    for (const payment of payments) {
+      totalAmount += payment.amount;
 
-  const byTableMap: Record<string, number> = {};
+      if (payment.paymentMethod === "CARD") {
+        cardTotal += payment.amount;
+      } else {
+        // Vše ostatní považujeme za hotovost (CASH)
+        cashTotal += payment.amount;
+      }
 
-  for (const payment of payments as any[]) {
-    const tableName = payment.order.table.name;
-    byTableMap[tableName] = (byTableMap[tableName] || 0) + payment.amount;
+      const tableName = payment.order.table?.name || "Neznámý stůl";
+      byTableMap[tableName] = (byTableMap[tableName] || 0) + payment.amount;
+    }
+
+    const byTable = Object.entries(byTableMap).map(([tableName, amount]) => ({
+      tableName,
+      amount,
+    }));
+
+    return NextResponse.json({
+      date: startOfDay.toISOString().split("T")[0],
+      totalAmount,
+      cashTotal,
+      cardTotal,
+      paymentCount: payments.length,
+      payments,
+      byTable,
+    });
+  } catch (error) {
+    console.error("Chyba při načítání souhrnu plateb:", error);
+    return NextResponse.json(
+      { error: "Chyba při načítání tržeb" },
+      { status: 500 }
+    );
   }
-
-  const byTable = Object.entries(byTableMap).map(([tableName, amount]) => ({
-    tableName,
-    amount,
-  }));
-
-  return NextResponse.json({
-    totalAmount,
-    paymentCount,
-    payments,
-    byTable,
-  });
 }
