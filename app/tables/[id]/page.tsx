@@ -46,16 +46,34 @@ export default function TableDetail({
   }, [params]);
 
   async function loadData(id: string) {
-    const [tableRes, productsRes] = await Promise.all([
-      fetch(`/api/tables/${id}`, { cache: "no-store" }),
-      fetch("/api/products", { cache: "no-store" }),
-    ]);
+    try {
+      // 1. Samostatné načtení produktů
+      const productsRes = await fetch("/api/products", { cache: "no-store" });
+      if (productsRes.ok) {
+        const productsData = await productsRes.json();
+        if (Array.isArray(productsData)) {
+          setProducts(productsData);
+        }
+      } else {
+        console.error("Chyba při stahování produktů:", productsRes.status);
+      }
+    } catch (e) {
+      console.error("Nepodařilo se načíst produkty:", e);
+    }
 
-    const tableData = await tableRes.json();
-    const productsData = await productsRes.json();
+    try {
+      // 2. Samostatné načtení stolu
+      const tableRes = await fetch(`/api/tables/${id}`, { cache: "no-store" });
+      if (tableRes.ok) {
+        const tableData = await tableRes.json();
+        setTable(tableData);
+      } else {
+        console.error("Chyba při stahování stolu:", tableRes.status);
+      }
+    } catch (e) {
+      console.error("Nepodařilo se načíst stůl:", e);
+    }
 
-    setTable(tableData);
-    setProducts(productsData);
     setSelectedQuantities({});
     setIsPayMode(false);
   }
