@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 
 export interface TableData {
@@ -51,7 +51,31 @@ export default function RoomMap({
 
   const floorRef = useRef<HTMLDivElement>(null);
 
-  // Přidání nového stolu
+  // 1. Automatická tichá synchronizace na pozadí (každé 4 sekundy)
+  useEffect(() => {
+    if (isEditMode) return; // při editaci neaktualizovat, ať to nepřerušuje tahání
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(
+          `/api/tables?section=${encodeURIComponent(sectionLabel)}`,
+          { cache: "no-store" }
+        );
+        if (res.ok) {
+          const freshTables = await res.json();
+          if (Array.isArray(freshTables)) {
+            setTables(freshTables);
+          }
+        }
+      } catch (err) {
+        // Tichý odchyt při výpadku sítě
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [sectionLabel, isEditMode]);
+
+  // 2. Přidání stolu
   const handleAddTable = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTableName.trim()) return;
@@ -88,7 +112,7 @@ export default function RoomMap({
     }
   };
 
-  // Drag stolu
+  // 3. Zahájení přesunu (Drag)
   const handleStartDrag = (table: TableData, e: React.PointerEvent) => {
     if (!isEditMode) return;
     e.stopPropagation();
@@ -106,7 +130,7 @@ export default function RoomMap({
     };
   };
 
-  // Resize stolu
+  // 4. Zahájení změny velikosti (Resize)
   const handleStartResize = (table: TableData, e: React.PointerEvent) => {
     if (!isEditMode) return;
     e.stopPropagation();
@@ -124,7 +148,7 @@ export default function RoomMap({
     };
   };
 
-  // Pohyb kurzoru po plátně
+  // 5. Pohyb po plátně
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!activeAction || activeId === null || !floorRef.current) return;
 
@@ -170,7 +194,7 @@ export default function RoomMap({
     );
   };
 
-  // Uložení pozice po puštění myši / prstu
+  // 6. Uložení pozice po puštění
   const handlePointerUp = async () => {
     if (!activeAction || activeId === null) return;
     const targetTable = tables.find((t) => t.id === activeId);
@@ -192,7 +216,7 @@ export default function RoomMap({
     }
   };
 
-  // Smazání stolu v editačním módu
+  // 7. Smazání stolu
   const handleDeleteTable = async (tableId: number, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm("Opravdu chcete smazat tento stůl?")) return;
@@ -238,7 +262,7 @@ export default function RoomMap({
         )}
       </div>
 
-      {/* Širokoúhlé plátno mapy vyplňující zbývající výšku */}
+      {/* Jednotné širokoúhlé plátno bez scrollování */}
       <div className="w-full flex-1 min-h-0 rounded-2xl border border-slate-300 bg-white p-2 shadow-xs overflow-hidden">
         <div
           ref={floorRef}
