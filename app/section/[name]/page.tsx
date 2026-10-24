@@ -27,8 +27,8 @@ export default async function SectionPage({
     name === "vnitrek"
       ? "Vnitřek"
       : name === "zahradka"
-      ? "Zahrádka"
-      : "Salónek";
+        ? "Zahrádka"
+        : "Salónek";
 
   const filteredTables = tables
     .filter((table: any) => {
@@ -54,7 +54,11 @@ export default async function SectionPage({
         id: table.id,
         name: table.name,
         section: table.section,
-        status: itemCount > 0 ? "occupied" : "free",
+        // Pokud jsou na stole položky, je obsazený; jinak bere status z DB (může být "reserved")
+        status: itemCount > 0 ? "occupied" : (table.status || "free"),
+        reservedName: table.reservedName,
+        reservedTime: table.reservedTime,
+        reservedPax: table.reservedPax,
         total,
         itemCount,
         posX: table.posX ?? 0,

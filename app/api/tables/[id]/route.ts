@@ -51,7 +51,17 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await req.json();
-    const { posX, posY, name, width, height } = body;
+    const {
+      posX,
+      posY,
+      name,
+      width,
+      height,
+      status,
+      reservedName,
+      reservedTime,
+      reservedPax,
+    } = body;
 
     const updatedTable = await prisma.table.update({
       where: { id: Number(id) },
@@ -61,12 +71,21 @@ export async function PATCH(
         ...(name !== undefined && { name }),
         ...(width !== undefined && { width: Number(width) }),
         ...(height !== undefined && { height: Number(height) }),
+        ...(status !== undefined && { status }),
+        ...(reservedName !== undefined && { reservedName }),
+        ...(reservedTime !== undefined && { reservedTime }),
+        ...(reservedPax !== undefined && {
+          reservedPax: reservedPax ? Number(reservedPax) : null,
+        }),
       },
     });
 
     return NextResponse.json(updatedTable);
   } catch (error) {
-    return NextResponse.json({ error: "Chyba při aktualizaci stolu" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Chyba při aktualizaci stolu" },
+      { status: 500 }
+    );
   }
 }
 

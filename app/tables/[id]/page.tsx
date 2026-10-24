@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type Product = {
   id: number;
@@ -20,6 +21,9 @@ type TableData = {
   id: number;
   name: string;
   status: string;
+  reservedName?: string | null;
+  reservedTime?: string | null;
+  reservedPax?: number | null;
   orders: {
     id: number;
     items: OrderItem[];
@@ -54,6 +58,13 @@ export default function TableDetail({
   const [selectedTargetTableId, setSelectedTargetTableId] = useState<number | null>(null);
   const [isTransferring, setIsTransferring] = useState(false);
 
+  // Stavy pro rezervaci
+  const [showReservationModal, setShowReservationModal] = useState(false);
+  const [resName, setResName] = useState("");
+  const [resTime, setResTime] = useState("");
+  const [resPax, setResPax] = useState("");
+  const [isSavingRes, setIsSavingRes] = useState(false);
+
   useEffect(() => {
     params.then(({ id }) => {
       setTableId(id);
@@ -61,7 +72,7 @@ export default function TableDetail({
   }, [params]);
 
   async function loadData(id: string) {
-    // 1. Načtení produktů
+    // 1. Produkty
     try {
       const productsRes = await fetch("/api/products", { cache: "no-store" });
       if (productsRes.ok) {
@@ -74,7 +85,7 @@ export default function TableDetail({
       console.error("Chyba při stahování produktů:", e);
     }
 
-    // 2. Načtení stolu
+    // 2. Detail stolu
     try {
       const tableRes = await fetch(`/api/tables/${id}`, { cache: "no-store" });
       if (tableRes.ok) {
@@ -85,7 +96,7 @@ export default function TableDetail({
       console.error("Chyba při stahování stolu:", e);
     }
 
-    // 3. Načtení všech stolů (pro přesun / sloučení)
+    // 3. Seznam stolů pro přesuny
     try {
       const allTablesRes = await fetch("/api/tables", { cache: "no-store" });
       if (allTablesRes.ok) {
@@ -108,7 +119,7 @@ export default function TableDetail({
     }
   }, [tableId]);
 
-  // Přidání produktu z katalogu
+  // Přidání položky z katalogu
   async function addProduct(productId: number) {
     await fetch(`/api/tables/${tableId}/items`, {
       method: "POST",
@@ -134,6 +145,7 @@ export default function TableDetail({
     await loadData(tableId);
   }
 
+  // Vyčištění stolu
   async function clearTable() {
     if (!window.confirm("Opravdu chceš vyčistit celý stůl?")) return;
     await fetch(`/api/tables/${tableId}/clear`, { method: "POST" });
@@ -207,7 +219,6 @@ export default function TableDetail({
 
       if (res.ok) {
         setShowTransferModal(false);
-        // Přesměruje rovnou na cílový stůl
         window.location.href = `/tables/${selectedTargetTableId}`;
       } else {
         const err = await res.json();
@@ -217,6 +228,37 @@ export default function TableDetail({
       alert("Chyba spojení při přesunu stolu");
     } finally {
       setIsTransferring(false);
+    }
+  }
+
+  // Otevření modálu rezervace
+  function openReservationModal() {
+    setResName(table?.reservedName || "");
+    setResTime(table?.reservedTime || "");
+    setResPax(table?.reservedPax ? String(table.reservedPax) : "");
+    setShowReservationModal(true);
+  }
+
+  // Uložení nebo zrušení rezervace
+  async function handleSaveReservation(clear = false) {
+    try {
+      setIsSavingRes(true);
+      await fetch(`/api/tables/${tableId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: clear ? "open" : "reserved",
+          reservedName: clear ? null : resName,
+          reservedTime: clear ? null : resTime,
+          reservedPax: clear ? null : resPax ? Number(resPax) : null,
+        }),
+      });
+      setShowReservationModal(false);
+      await loadData(tableId);
+    } catch (e) {
+      alert("Chyba při ukládání rezervace");
+    } finally {
+      setIsSavingRes(false);
     }
   }
 
@@ -243,31 +285,42 @@ export default function TableDetail({
   }, 0);
 
   const amountToPay = isPayMode && selectedTotal > 0 ? selectedTotal : total;
+  const isReserved = table?.status === "reserved" && items.length === 0;
 
   return (
     <main className="h-screen max-h-screen bg-slate-100 flex flex-col overflow-hidden select-none">
       {/* Horní kompaktní lišta stolu */}
       <header className="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between shrink-0 shadow-xs">
         <div className="flex items-center gap-3">
-          <a
+          <Link
             href="/"
-            className="flex items-center gap-1 text-sm font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl transition"
+            className="flex items-center gap-1 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl transition"
           >
             ← Přehled
-          </a>
-          <div>
+          </Link>
+          <div className="flex items-center gap-2">
             <span className="text-xl font-black text-slate-900 tracking-tight">
               {table?.name || `Stůl ${tableId}`}
             </span>
             <span
-              className={`ml-2.5 inline-block text-xs font-bold px-2 py-0.5 rounded-full ${
-                items.length === 0
-                  ? "bg-slate-100 text-slate-600"
+              className={`inline-block text-xs font-bold px-2 py-0.5 rounded-full ${
+                items.length > 0
+                  ? "bg-red-100 text-red-800"
+                  : isReserved
+                  ? "bg-amber-100 text-amber-900"
                   : "bg-emerald-100 text-emerald-800"
               }`}
             >
-              {items.length === 0 ? "Volný" : "Obsazený"}
+              {items.length > 0 ? "Obsazený" : isReserved ? "Rezervace" : "Volný"}
             </span>
+
+            {/* Tlačítko pro správu rezervace */}
+            <button
+              onClick={openReservationModal}
+              className="rounded-xl border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800 hover:bg-amber-100 transition cursor-pointer"
+            >
+              {isReserved ? "🟡 Upravit rezervaci" : "📅 Rezervovat"}
+            </button>
           </div>
         </div>
 
@@ -300,7 +353,6 @@ export default function TableDetail({
               Účet ({items.reduce((s, i) => s + i.quantity, 0)} ks)
             </span>
             <div className="flex gap-1.5">
-              {/* Tlačítko přesunu a sloučení */}
               <button
                 onClick={() => {
                   setSelectedTargetTableId(null);
@@ -339,7 +391,24 @@ export default function TableDetail({
 
           {/* Seznam položek */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {items.length === 0 ? (
+            {isReserved && items.length === 0 && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-center">
+                <span className="text-2xl">📅</span>
+                <p className="mt-1 font-bold text-amber-900 text-sm">
+                  Stůl je rezervován na {table?.reservedTime || "dnes"}
+                </p>
+                {table?.reservedName && (
+                  <p className="text-xs text-amber-800 font-semibold mt-0.5">
+                    Host: {table.reservedName} {table.reservedPax ? `(${table.reservedPax} osob)` : ""}
+                  </p>
+                )}
+                <p className="text-[11px] text-amber-700 mt-2">
+                  Přidáním první položky z katalogu se stůl automaticky změní na aktivní.
+                </p>
+              </div>
+            )}
+
+            {items.length === 0 && !isReserved ? (
               <div className="h-full flex flex-col items-center justify-center text-center text-slate-400 p-6">
                 <span className="text-4xl mb-2">🍽️</span>
                 <p className="font-medium text-sm">Stůl je prázdný.</p>
@@ -583,6 +652,86 @@ export default function TableDetail({
                 className="w-full rounded-2xl bg-slate-100 hover:bg-slate-200 py-3 text-sm font-semibold text-slate-600 transition cursor-pointer"
               >
                 Zrušit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: Rezervace stolu */}
+      {showReservationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-xl font-black text-slate-900">Rezervace stolu</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Nastavení času příchodu a jména hosta
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Čas příchodu
+                </label>
+                <input
+                  type="time"
+                  value={resTime}
+                  onChange={(e) => setResTime(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Jméno / Firma
+                </label>
+                <input
+                  type="text"
+                  placeholder="např. Novák"
+                  value={resName}
+                  onChange={(e) => setResName(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Počet osob
+                </label>
+                <input
+                  type="number"
+                  placeholder="např. 4"
+                  value={resPax}
+                  onChange={(e) => setResPax(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-2">
+              <button
+                onClick={() => handleSaveReservation(false)}
+                disabled={isSavingRes}
+                className="w-full rounded-2xl bg-amber-500 hover:bg-amber-600 active:scale-95 py-3 text-sm font-bold text-white shadow transition cursor-pointer disabled:opacity-50"
+              >
+                {isSavingRes ? "Ukládám..." : "Uložit rezervaci"}
+              </button>
+
+              {table?.status === "reserved" && (
+                <button
+                  onClick={() => handleSaveReservation(true)}
+                  disabled={isSavingRes}
+                  className="w-full rounded-2xl border border-red-200 bg-red-50 hover:bg-red-100 py-2.5 text-xs font-bold text-red-600 transition cursor-pointer"
+                >
+                  Zrušit rezervaci (uvolnit stůl)
+                </button>
+              )}
+
+              <button
+                onClick={() => setShowReservationModal(false)}
+                disabled={isSavingRes}
+                className="w-full rounded-2xl bg-slate-100 hover:bg-slate-200 py-2.5 text-xs font-semibold text-slate-600 transition cursor-pointer"
+              >
+                Zavřít
               </button>
             </div>
           </div>

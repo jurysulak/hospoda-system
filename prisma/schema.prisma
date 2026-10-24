@@ -13,11 +13,15 @@ generator client {
 
 model Table {
   id        Int      @id @default(autoincrement())
-  name      String   // Název stolu (např. "Box 1", "TV levá")
+  name      String
   section   String   @default("Vnitřek")
-  status    String   @default("open") // "open" / "free" apod.
-  
-  // Pozice a rozměry pro vizuální mapu půdorysu (v pixelech)
+  status    String   @default("open") // "open", "occupied", "reserved"
+
+  // Údaje o rezervaci
+  reservedName String?
+  reservedTime String? // např. "18:30"
+  reservedPax  Int?    // počet osob (např. 4)
+
   posX      Int      @default(0)
   posY      Int      @default(0)
   width     Int      @default(110)

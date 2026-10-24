@@ -3,11 +3,14 @@
 import React, { useState, useRef } from "react";
 import Link from "next/link";
 
-interface TableData {
+export interface TableData {
   id: number;
   name: string;
   section: string;
-  status: string;
+  status: string; // "open" | "occupied" | "reserved" | "free"
+  reservedName?: string | null;
+  reservedTime?: string | null;
+  reservedPax?: number | null;
   total: number;
   itemCount: number;
   posX: number;
@@ -48,7 +51,7 @@ export default function RoomMap({
 
   const floorRef = useRef<HTMLDivElement>(null);
 
-  // 1. Přidání stolu
+  // Přidání nového stolu
   const handleAddTable = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTableName.trim()) return;
@@ -73,7 +76,7 @@ export default function RoomMap({
           ...prev,
           {
             ...created,
-            status: "free",
+            status: "open",
             total: 0,
             itemCount: 0,
           },
@@ -85,7 +88,7 @@ export default function RoomMap({
     }
   };
 
-  // 2. Zahájení přesunu (Drag)
+  // Drag stolu
   const handleStartDrag = (table: TableData, e: React.PointerEvent) => {
     if (!isEditMode) return;
     e.stopPropagation();
@@ -103,7 +106,7 @@ export default function RoomMap({
     };
   };
 
-  // 3. Zahájení změny velikosti (Resize)
+  // Resize stolu
   const handleStartResize = (table: TableData, e: React.PointerEvent) => {
     if (!isEditMode) return;
     e.stopPropagation();
@@ -121,7 +124,7 @@ export default function RoomMap({
     };
   };
 
-  // 4. Pohyb / změna velikosti
+  // Pohyb kurzoru po plátně
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!activeAction || activeId === null || !floorRef.current) return;
 
@@ -167,7 +170,7 @@ export default function RoomMap({
     );
   };
 
-  // 5. Uložení pozice po puštění
+  // Uložení pozice po puštění myši / prstu
   const handlePointerUp = async () => {
     if (!activeAction || activeId === null) return;
     const targetTable = tables.find((t) => t.id === activeId);
@@ -189,7 +192,7 @@ export default function RoomMap({
     }
   };
 
-  // 6. Smazání stolu
+  // Smazání stolu v editačním módu
   const handleDeleteTable = async (tableId: number, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm("Opravdu chcete smazat tento stůl?")) return;
@@ -202,7 +205,7 @@ export default function RoomMap({
 
   return (
     <div className="flex-1 flex flex-col min-h-0 space-y-2 overflow-hidden">
-      {/* Kompaktní horní ovládací lišta */}
+      {/* Kompaktní ovládací lišta */}
       <div className="flex items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 shadow-xs shrink-0">
         <button
           type="button"
@@ -235,7 +238,7 @@ export default function RoomMap({
         )}
       </div>
 
-      {/* Jednotné širokoúhlé plátno bez scrollování */}
+      {/* Širokoúhlé plátno mapy vyplňující zbývající výšku */}
       <div className="w-full flex-1 min-h-0 rounded-2xl border border-slate-300 bg-white p-2 shadow-xs overflow-hidden">
         <div
           ref={floorRef}
@@ -248,7 +251,10 @@ export default function RoomMap({
           }`}
         >
           {tables.map((table) => {
-            const isFree = table.status === "free";
+            const hasItems = table.itemCount > 0;
+            const isReserved = !hasItems && table.status === "reserved";
+            const isOccupied = hasItems || table.status === "occupied";
+            const isFree = !isReserved && !isOccupied;
 
             return (
               <div
@@ -262,12 +268,14 @@ export default function RoomMap({
                   height: `${table.height}px`,
                   touchAction: "none",
                 }}
-                className={`flex flex-col justify-between rounded-xl border-2 p-1.5 shadow-xs ${
+                className={`flex flex-col justify-between rounded-xl border-2 p-1.5 shadow-xs transition ${
                   isEditMode
                     ? "cursor-grab active:cursor-grabbing border-amber-500 bg-amber-50/95"
-                    : isFree
-                    ? "border-green-500 bg-green-50 text-green-950 hover:bg-green-100 cursor-pointer"
-                    : "border-red-500 bg-red-50 text-red-950 hover:bg-red-100 cursor-pointer"
+                    : isOccupied
+                    ? "border-red-500 bg-red-50 text-red-950 hover:bg-red-100 cursor-pointer"
+                    : isReserved
+                    ? "border-amber-500 bg-amber-50 text-amber-950 hover:bg-amber-100 cursor-pointer"
+                    : "border-green-500 bg-green-50 text-green-950 hover:bg-green-100 cursor-pointer"
                 }`}
               >
                 {!isEditMode ? (
@@ -279,16 +287,30 @@ export default function RoomMap({
                       <span className="truncate text-xs font-black tracking-wide">
                         {table.name}
                       </span>
-                      <span className="text-[10px]">{isFree ? "🟢" : "🔴"}</span>
-                    </div>
-                    <div className="flex items-end justify-between text-[11px] leading-tight">
-                      <span className="font-medium text-slate-500">
-                        {table.itemCount} ks
-                      </span>
-                      <span className="font-bold text-slate-900">
-                        {table.total} Kč
+                      <span className="text-[10px]">
+                        {isOccupied ? "🔴" : isReserved ? "🟡" : "🟢"}
                       </span>
                     </div>
+
+                    {isReserved ? (
+                      <div className="text-[11px] font-bold text-amber-900 leading-tight truncate">
+                        🕒 {table.reservedTime || "Rezervace"}
+                        {table.reservedName && (
+                          <span className="block font-medium truncate text-amber-800 text-[10px]">
+                            {table.reservedName} {table.reservedPax ? `(${table.reservedPax} os.)` : ""}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-end justify-between text-[11px] leading-tight">
+                        <span className="font-medium text-slate-500">
+                          {table.itemCount} ks
+                        </span>
+                        <span className="font-bold text-slate-900">
+                          {table.total} Kč
+                        </span>
+                      </div>
+                    )}
                   </Link>
                 ) : (
                   <div className="flex h-full flex-col justify-between relative">
@@ -299,7 +321,7 @@ export default function RoomMap({
                       <button
                         type="button"
                         onClick={(e) => handleDeleteTable(table.id, e)}
-                        className="text-red-500 hover:text-red-700 font-bold text-xs px-1"
+                        className="text-red-500 hover:text-red-700 font-bold text-xs px-1 cursor-pointer"
                       >
                         ✕
                       </button>
