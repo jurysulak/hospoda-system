@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-slate-200 p-4 md:p-6">
@@ -60,6 +62,13 @@ export default function Home() {
           >
             Sklad
           </a>
+
+          <Link
+          href="/kitchen"
+          className="rounded-2xl bg-amber-600 px-5 py-4 text-lg font-semibold text-white shadow-sm hover:bg-amber-700 transition"
+        >
+          🍳 Kuchyně (KDS)
+        </Link>
         </div>
       </div>
     </main>
