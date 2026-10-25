@@ -21,6 +21,20 @@ export default function KitchenPage() {
   const [tickets, setTickets] = useState<KitchenTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState<Date>(new Date());
+  const [completedOrderIds, setCompletedOrderIds] = useState<number[]>([]);
+  const [showCompleted, setShowCompleted] = useState(false);
+
+  // Načtení vyřízených bonů z paměti prohlížeče
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("kitchen_completed_orders");
+      if (saved) {
+        setCompletedOrderIds(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error("Chyba při čtení localStorage:", e);
+    }
+  }, []);
 
   // Načtení dat z API
   const fetchTickets = async () => {
@@ -37,7 +51,7 @@ export default function KitchenPage() {
     }
   };
 
-  // Pravidelný tichý auto-sync každé 3 sekundy + tikání hodin každou minutu
+  // Pravidelný auto-sync každé 3 sekundy + tikání minutky
   useEffect(() => {
     fetchTickets();
     const syncInterval = setInterval(fetchTickets, 3000);
@@ -49,6 +63,24 @@ export default function KitchenPage() {
     };
   }, []);
 
+  // Označení bonu jako Hotovo / Vydáno
+  const handleMarkDone = (orderId: number) => {
+    setCompletedOrderIds((prev) => {
+      const updated = [...prev, orderId];
+      localStorage.setItem("kitchen_completed_orders", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // Vrácení bonu zpět mezi aktivní (pokud se kuchař uklikne)
+  const handleRestoreOrder = (orderId: number) => {
+    setCompletedOrderIds((prev) => {
+      const updated = prev.filter((id) => id !== orderId);
+      localStorage.setItem("kitchen_completed_orders", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   // Výpočet doby čekání
   const getWaitMinutes = (createdAt: string) => {
     const created = new Date(createdAt);
@@ -56,7 +88,7 @@ export default function KitchenPage() {
     return Math.max(0, Math.floor(diffMs / 60000));
   };
 
-  // Rychlý tisk jednoho bonu
+  // Tisk bonu
   const handlePrint = (ticket: KitchenTicket) => {
     const printWindow = window.open("", "_blank", "width=350,height=500");
     if (!printWindow) return;
@@ -104,14 +136,24 @@ export default function KitchenPage() {
     printWindow.document.close();
   };
 
+  // Rozdělení na aktivní a hotové
+  const activeTickets = tickets.filter(
+    (t) => !completedOrderIds.includes(t.orderId)
+  );
+  const completedTickets = tickets.filter((t) =>
+    completedOrderIds.includes(t.orderId)
+  );
+
+  const displayedTickets = showCompleted ? completedTickets : activeTickets;
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col select-none p-4">
-      {/* Horní ovládací lišta KDS */}
-      <header className="flex items-center justify-between pb-4 border-b border-slate-800">
+      {/* Horní lišta */}
+      <header className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
         <div className="flex items-center gap-3">
           <Link
             href="/"
-            className="rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-2 text-xs font-bold transition"
+            className="rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-2 text-xs font-bold transition cursor-pointer"
           >
             ← Zpět
           </Link>
@@ -120,43 +162,72 @@ export default function KitchenPage() {
           </h1>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="text-xs font-bold text-slate-400">
-            Aktivní bony:{" "}
-            <span className="text-emerald-400 text-base font-black">
-              {tickets.length}
-            </span>
+        <div className="flex items-center gap-3">
+          {/* Přepínač Aktivní vs Vydané */}
+          <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs font-bold">
+            <button
+              onClick={() => setShowCompleted(false)}
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                !showCompleted
+                  ? "bg-amber-600 text-white shadow-xs"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              K vaření ({activeTickets.length})
+            </button>
+            <button
+              onClick={() => setShowCompleted(true)}
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                showCompleted
+                  ? "bg-slate-800 text-white shadow-xs"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              Vydáno ({completedTickets.length})
+            </button>
           </div>
-          <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" title="Živé spojení" />
+
+          <div
+            className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse ml-1"
+            title="Živé spojení s placem"
+          />
         </div>
       </header>
 
-      {/* Mřížka objednávek k výdeji */}
+      {/* Seznam bonů */}
       <div className="flex-1 mt-4">
         {loading ? (
           <div className="h-64 flex items-center justify-center text-slate-500 font-bold">
             Načítám objednávky...
           </div>
-        ) : tickets.length === 0 ? (
+        ) : displayedTickets.length === 0 ? (
           <div className="h-96 flex flex-col items-center justify-center text-center text-slate-500">
-            <span className="text-5xl mb-3">👨‍🍳</span>
-            <p className="text-xl font-bold text-slate-400">Žádné objednávky k vaření</p>
+            <span className="text-5xl mb-3">
+              {showCompleted ? "📦" : "👨‍🍳"}
+            </span>
+            <p className="text-xl font-bold text-slate-400">
+              {showCompleted ? "Žádné vydané objednávky" : "Všechna jídla jsou uvařena!"}
+            </p>
             <p className="text-xs text-slate-600 mt-1">
-              Jakmile obsluha markne jídlo, okamžitě se zde objeví.
+              {showCompleted
+                ? "Až kuchař označí jídlo jako vydané, uvidíš ho zde."
+                : "Jakmile obsluha markne nové jídlo, okamžitě se zde objeví."}
             </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-            {tickets.map((ticket) => {
+            {displayedTickets.map((ticket) => {
               const waitMins = getWaitMinutes(ticket.createdAt);
-              const isUrgent = waitMins >= 15;
-              const isWarning = waitMins >= 10 && !isUrgent;
+              const isUrgent = waitMins >= 15 && !showCompleted;
+              const isWarning = waitMins >= 10 && !isUrgent && !showCompleted;
 
               return (
                 <div
                   key={ticket.orderId}
                   className={`rounded-2xl border flex flex-col justify-between overflow-hidden shadow-lg transition ${
-                    isUrgent
+                    showCompleted
+                      ? "border-slate-800 bg-slate-900/50 opacity-75"
+                      : isUrgent
                       ? "border-red-600 bg-red-950/40"
                       : isWarning
                       ? "border-amber-600 bg-amber-950/30"
@@ -164,7 +235,7 @@ export default function KitchenPage() {
                   }`}
                 >
                   {/* Hlavička bonu */}
-                  <div className="p-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/60">
+                  <div className="p-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/70">
                     <div>
                       <span className="text-lg font-black text-white block leading-none">
                         {ticket.tableName}
@@ -174,17 +245,23 @@ export default function KitchenPage() {
                       </span>
                     </div>
 
-                    <div
-                      className={`text-xs font-black px-2 py-1 rounded-lg ${
-                        isUrgent
-                          ? "bg-red-500 text-white animate-bounce"
-                          : isWarning
-                          ? "bg-amber-500 text-black"
-                          : "bg-slate-800 text-slate-300"
-                      }`}
-                    >
-                      ⏱ {waitMins} min
-                    </div>
+                    {!showCompleted ? (
+                      <div
+                        className={`text-xs font-black px-2 py-1 rounded-lg ${
+                          isUrgent
+                            ? "bg-red-500 text-white animate-bounce"
+                            : isWarning
+                            ? "bg-amber-500 text-black"
+                            : "bg-slate-800 text-slate-300"
+                        }`}
+                      >
+                        ⏱ {waitMins} min
+                      </div>
+                    ) : (
+                      <span className="text-xs font-bold text-emerald-400">
+                        ✓ Vydáno
+                      </span>
+                    )}
                   </div>
 
                   {/* Seznam jídel */}
@@ -204,14 +281,31 @@ export default function KitchenPage() {
                     ))}
                   </div>
 
-                  {/* Akce pod lístkem */}
+                  {/* Spodní akční tlačítka */}
                   <div className="p-3 border-t border-slate-800/80 bg-slate-900/40 flex items-center gap-2">
                     <button
                       onClick={() => handlePrint(ticket)}
-                      className="flex-1 rounded-xl bg-slate-800 hover:bg-slate-700 py-2.5 text-xs font-bold text-slate-200 transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                      className="rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 px-3 py-2.5 text-xs font-bold text-slate-200 transition active:scale-95 cursor-pointer"
+                      title="Vytisknout papírový bon"
                     >
-                      🖨️ Bon
+                      🖨️
                     </button>
+
+                    {!showCompleted ? (
+                      <button
+                        onClick={() => handleMarkDone(ticket.orderId)}
+                        className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 py-2.5 text-sm font-black text-white shadow transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        ✓ Hotovo / Vydáno
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleRestoreOrder(ticket.orderId)}
+                        className="flex-1 rounded-xl bg-slate-800 hover:bg-slate-700 py-2.5 text-xs font-bold text-slate-300 transition cursor-pointer"
+                      >
+                        ↩ Vrátit k vaření
+                      </button>
+                    )}
                   </div>
                 </div>
               );
