@@ -1,73 +1,48 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-const KITCHEN_CATEGORIES = [
-  "Jídlo",
-  "Chuťovky",
-  "Pochutiny",
-  "Teplá kuchyně",
-  "Dezerty",
-  "Polévky",
-];
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const kitchenProducts = await prisma.product.findMany({
-      where: {
-        category: {
-          in: KITCHEN_CATEGORIES,
-          mode: "insensitive",
-        },
-      },
-      select: {
-        name: true,
-      },
-    });
-
-    const kitchenProductNames = new Set(kitchenProducts.map((p) => p.name));
-
+    // Načteme všechny otevřené objednávky se všemi položkami
     const openOrders = await prisma.order.findMany({
       where: {
         status: "open",
       },
       include: {
         table: true,
-        items: true,
+        items: {
+          orderBy: { id: "asc" },
+        },
       },
       orderBy: {
         createdAt: "asc",
       },
     });
 
+    // Převedeme na formát pro kuchyňské bony
     const kitchenTickets = openOrders
-      .map((order) => {
-        const foodItems = order.items.filter((item) =>
-          kitchenProductNames.has(item.productName)
-        );
-
-        if (foodItems.length === 0) return null;
-
-        return {
-          orderId: order.id,
-          tableName: order.table?.name ?? `Stůl ${order.tableId}`,
-          section: order.table?.section ?? "Vnitřek",
-          createdAt: order.createdAt,
-          items: foodItems.map((item) => ({
-            id: item.id,
-            name: item.productName,
-            quantity: item.quantity,
-            status: item.status || "PENDING",
-            note: item.note || null,
-          })),
-        };
-      })
-      .filter(Boolean);
+      .filter((order) => order.items.length > 0)
+      .map((order) => ({
+        orderId: order.id,
+        tableName: order.table?.name ?? `Stůl ${order.tableId}`,
+        section: order.table?.section ?? "Vnitřek",
+        createdAt: order.createdAt,
+        items: order.items.map((item) => ({
+          id: item.id,
+          name: item.productName,
+          quantity: item.quantity,
+          status: item.status || "PENDING",
+          note: item.note || null,
+        })),
+      }));
 
     return NextResponse.json(kitchenTickets, { status: 200 });
-  } catch (error) {
-    console.error("Chyba při načítání kuchyňských objednávek:", error);
+  } catch (error: any) {
+    console.error("Chyba při načítání kuchyně:", error);
     return NextResponse.json(
-      { error: "Nepodařilo se načíst objednávky pro kuchyň" },
+      { error: "Chyba načítání dat kuchyně", details: error?.message },
       { status: 500 }
     );
   }
