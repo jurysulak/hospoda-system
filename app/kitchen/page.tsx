@@ -72,13 +72,25 @@ export default function KitchenPage() {
     });
   };
 
-  // Vrácení bonu zpět mezi aktivní (pokud se kuchař uklikne)
+  // Vrácení bonu zpět mezi aktivní
   const handleRestoreOrder = (orderId: number) => {
     setCompletedOrderIds((prev) => {
       const updated = prev.filter((id) => id !== orderId);
       localStorage.setItem("kitchen_completed_orders", JSON.stringify(updated));
       return updated;
     });
+  };
+
+  // Vyčištění historie vydaných bonů (nová směna)
+  const handleClearCompleted = () => {
+    if (
+      !window.confirm(
+        "Opravdu chceš vyčistit historii vydaných jídel? Udělej to až po vytištění denního raportu na konci směny."
+      )
+    )
+      return;
+    setCompletedOrderIds([]);
+    localStorage.removeItem("kitchen_completed_orders");
   };
 
   // Výpočet doby čekání
@@ -88,8 +100,8 @@ export default function KitchenPage() {
     return Math.max(0, Math.floor(diffMs / 60000));
   };
 
-  // Tisk bonu
-  const handlePrint = (ticket: KitchenTicket) => {
+  // Tisk jednotlivého bonu k jídlu
+  const handlePrintSingle = (ticket: KitchenTicket) => {
     const printWindow = window.open("", "_blank", "width=350,height=500");
     if (!printWindow) return;
 
@@ -144,6 +156,84 @@ export default function KitchenPage() {
     completedOrderIds.includes(t.orderId)
   );
 
+  // Souhrn uvařených položek pro záložku Vydáno a pro Raport
+  const cookedSummaryMap: Record<string, number> = {};
+  for (const ticket of completedTickets) {
+    for (const item of ticket.items) {
+      cookedSummaryMap[item.name] =
+        (cookedSummaryMap[item.name] || 0) + item.quantity;
+    }
+  }
+
+  const cookedSummary = Object.entries(cookedSummaryMap).sort(
+    (a, b) => b[1] - a[1]
+  );
+  const totalCookedPortions = cookedSummary.reduce(
+    (acc, [, qty]) => acc + qty,
+    0
+  );
+
+  // Tisk denního raportu kuchyně
+  const handlePrintKitchenRaport = () => {
+    const printWindow = window.open("", "_blank", "width=380,height=600");
+    if (!printWindow) return;
+
+    const dateStr = now.toLocaleDateString("cs-CZ");
+    const timeStr = now.toLocaleTimeString("cs-CZ", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const rowsHtml = cookedSummary
+      .map(
+        ([name, qty]) => `
+        <div style="display:flex; justify-content:space-between; font-size:14px; font-weight:bold; padding:4px 0; border-bottom:1px dashed #ccc;">
+          <span>${name}</span>
+          <span style="font-size:16px;">${qty} ks</span>
+        </div>
+      `
+      )
+      .join("");
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>DENNÍ RAPORT KUCHYNĚ</title>
+          <style>
+            body { font-family: monospace; padding: 12px; margin: 0; width: 78mm; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 10px; }
+            .title { font-size: 18px; font-weight: 900; }
+            .summary { margin: 12px 0; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 8px 0; }
+            .total { display: flex; justify-content: space-between; font-size: 16px; font-weight: 900; }
+            .footer { margin-top: 20px; font-size: 11px; text-align: center; }
+            .sign { margin-top: 30px; border-top: 1px dotted #000; padding-top: 4px; text-align: center; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="title">DENNÍ RAPORT KUCHYNĚ</div>
+            <div style="font-size:12px; margin-top:2px;">Hospoda U Šuláků</div>
+            <div style="font-size:11px; color:#555; margin-top:2px;">${dateStr} • ${timeStr}</div>
+          </div>
+          <div>${rowsHtml}</div>
+          <div class="summary">
+            <div class="total">
+              <span>UVAŘENO CELKEM:</span>
+              <span>${totalCookedPortions} porcí</span>
+            </div>
+            <div style="font-size:11px; color:#555; margin-top:3px;">Vyřízeno objednávek: ${completedTickets.length}</div>
+          </div>
+          <div class="sign">Podpis šéfkuchaře / směny</div>
+          <div class="footer">Konec směny - vygenerováno systémem</div>
+          <script>
+            window.onload = function() { window.print(); window.close(); }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   const displayedTickets = showCompleted ? completedTickets : activeTickets;
 
   return (
@@ -194,6 +284,59 @@ export default function KitchenPage() {
         </div>
       </header>
 
+      {/* ZÁLOŽKA VYDÁNO: Horní statistický souhrn uvařených porcí */}
+      {showCompleted && (
+        <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-lg">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div>
+              <h2 className="text-base font-black text-white flex items-center gap-2">
+                📊 Denní bilance uvařených jídel
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Celkem vydáno {totalCookedPortions} porcí z {completedTickets.length} objednávek
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handlePrintKitchenRaport}
+                disabled={completedTickets.length === 0}
+                className="rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                🖨️ Vytisknout raport kuchyně
+              </button>
+
+              <button
+                onClick={handleClearCompleted}
+                disabled={completedTickets.length === 0}
+                className="rounded-xl border border-red-900/60 bg-red-950/40 hover:bg-red-900/60 text-red-300 px-3 py-2 text-xs font-bold transition cursor-pointer"
+              >
+                Resetovat směnu
+              </button>
+            </div>
+          </div>
+
+          {/* Mřížka součtů porcí jednotlivých jídel */}
+          {cookedSummary.length > 0 && (
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+              {cookedSummary.map(([name, qty]) => (
+                <div
+                  key={name}
+                  className="rounded-xl bg-slate-950 border border-slate-800 p-2.5 flex flex-col justify-between"
+                >
+                  <span className="text-xs font-bold text-slate-300 truncate">
+                    {name}
+                  </span>
+                  <span className="text-lg font-black text-amber-400 mt-1">
+                    {qty} ks
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Seznam bonů */}
       <div className="flex-1 mt-4">
         {loading ? (
@@ -206,11 +349,11 @@ export default function KitchenPage() {
               {showCompleted ? "📦" : "👨‍🍳"}
             </span>
             <p className="text-xl font-bold text-slate-400">
-              {showCompleted ? "Žádné vydané objednávky" : "Všechna jídla jsou uvařena!"}
+              {showCompleted ? "Žádná vydaná jídla" : "Všechna jídla jsou uvařena!"}
             </p>
             <p className="text-xs text-slate-600 mt-1">
               {showCompleted
-                ? "Až kuchař označí jídlo jako vydané, uvidíš ho zde."
+                ? "Až kuchař označí jídlo jako vydané, uvidíš ho zde v raportu."
                 : "Jakmile obsluha markne nové jídlo, okamžitě se zde objeví."}
             </p>
           </div>
@@ -226,7 +369,7 @@ export default function KitchenPage() {
                   key={ticket.orderId}
                   className={`rounded-2xl border flex flex-col justify-between overflow-hidden shadow-lg transition ${
                     showCompleted
-                      ? "border-slate-800 bg-slate-900/50 opacity-75"
+                      ? "border-slate-800 bg-slate-900/50 opacity-80"
                       : isUrgent
                       ? "border-red-600 bg-red-950/40"
                       : isWarning
@@ -284,11 +427,11 @@ export default function KitchenPage() {
                   {/* Spodní akční tlačítka */}
                   <div className="p-3 border-t border-slate-800/80 bg-slate-900/40 flex items-center gap-2">
                     <button
-                      onClick={() => handlePrint(ticket)}
+                      onClick={() => handlePrintSingle(ticket)}
                       className="rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 px-3 py-2.5 text-xs font-bold text-slate-200 transition active:scale-95 cursor-pointer"
                       title="Vytisknout papírový bon"
                     >
-                      🖨️
+                      🖨️ Bon
                     </button>
 
                     {!showCompleted ? (
