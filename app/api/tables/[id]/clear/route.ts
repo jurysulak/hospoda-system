@@ -8,6 +8,14 @@ export async function POST(
   const { id } = await params;
   const tableId = Number(id);
 
+  // 1. Nastavíme status stolu zpět na open
+  await prisma.table.update({
+    where: { id: tableId },
+    data: {
+      status: "open",
+    },
+  });
+
   const order = await prisma.order.findFirst({
     where: {
       tableId,
@@ -22,6 +30,7 @@ export async function POST(
     return NextResponse.json({ success: true });
   }
 
+  // 2. Smažeme položky a uzavřeme objednávku
   await prisma.orderItem.deleteMany({
     where: {
       orderId: order.id,

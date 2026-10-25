@@ -234,11 +234,10 @@ export default function RoomMap({
         <button
           type="button"
           onClick={() => setIsEditMode(!isEditMode)}
-          className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
-            isEditMode
+          className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${isEditMode
               ? "bg-amber-600 text-white hover:bg-amber-700 shadow"
               : "bg-slate-800 text-white hover:bg-slate-700"
-          }`}
+            }`}
         >
           {isEditMode ? "✓ Dokončit úpravy" : "⚙ Upravit rozestavení"}
         </button>
@@ -268,18 +267,18 @@ export default function RoomMap({
           ref={floorRef}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          className={`relative w-full h-full rounded-xl select-none overflow-hidden transition-all ${
-            isEditMode
+          className={`relative w-full h-full rounded-xl select-none overflow-hidden transition-all ${isEditMode
               ? "bg-[radial-gradient(#94a3b8_1px,transparent_1px)] [background-size:15px_15px] bg-slate-100 border-2 border-dashed border-amber-400"
               : "bg-slate-50 border border-slate-200"
-          }`}
+            }`}
         >
           {tables.map((table) => {
+            // NOVÝ KÓD:
             const hasItems = table.itemCount > 0;
             const isReserved = !hasItems && table.status === "reserved";
-            const isOccupied = hasItems || table.status === "occupied";
+            // Stůl je obsazený POUZE pokud má reálně namarkované položky:
+            const isOccupied = hasItems;
             const isFree = !isReserved && !isOccupied;
-
             return (
               <div
                 key={table.id}
@@ -292,15 +291,14 @@ export default function RoomMap({
                   height: `${table.height}px`,
                   touchAction: "none",
                 }}
-                className={`flex flex-col justify-between rounded-xl border-2 p-1.5 shadow-xs transition ${
-                  isEditMode
+                className={`flex flex-col justify-between rounded-xl border-2 p-1.5 shadow-xs transition ${isEditMode
                     ? "cursor-grab active:cursor-grabbing border-amber-500 bg-amber-50/95"
                     : isOccupied
-                    ? "border-red-500 bg-red-50 text-red-950 hover:bg-red-100 cursor-pointer"
-                    : isReserved
-                    ? "border-amber-500 bg-amber-50 text-amber-950 hover:bg-amber-100 cursor-pointer"
-                    : "border-green-500 bg-green-50 text-green-950 hover:bg-green-100 cursor-pointer"
-                }`}
+                      ? "border-red-500 bg-red-50 text-red-950 hover:bg-red-100 cursor-pointer"
+                      : isReserved
+                        ? "border-amber-500 bg-amber-50 text-amber-950 hover:bg-amber-100 cursor-pointer"
+                        : "border-green-500 bg-green-50 text-green-950 hover:bg-green-100 cursor-pointer"
+                  }`}
               >
                 {!isEditMode ? (
                   <Link
