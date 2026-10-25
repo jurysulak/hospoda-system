@@ -3,11 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-// -------------------------------------------------------------
-// TVŮJ VLASTNÍ PIN KÓD PRO ODEMČENÍ SOUHRNU
-// -------------------------------------------------------------
-const MASTER_PIN = "1234";
-
 type TopProduct = {
   name: string;
   quantity: number;
@@ -31,27 +26,24 @@ export default function SummaryPage() {
   const [data, setData] = useState<SummaryData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Kontrola, zda už byl PIN v této relaci zadán
-  useEffect(() => {
-    const unlocked = sessionStorage.getItem("summary_unlocked");
-    if (unlocked === "true") {
-      setIsUnlocked(true);
+  // Získání aktuálního PINu z prohlížeče (nebo výchozí 1234)
+  const getMasterPin = () => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("gastro_summary_pin") || "1234";
     }
-  }, []);
+    return "1234";
+  };
 
-  // Načtení dat souhrnu po odemčení
+  // Načtení dat po odemčení
   useEffect(() => {
     if (!isUnlocked) return;
 
     async function fetchSummary() {
       try {
         setLoading(true);
-        // Voláme existující endpoint pro denní souhrn plateb:
         const res = await fetch("/api/payments/summary", { cache: "no-store" });
         if (res.ok) {
           const json = await res.json();
-
-          // Spočítáme hotovost a karty, pokud je endpoint neposkytuje přímo
           const payments = json.payments || [];
           const cardSum =
             json.cardTotal ??
@@ -65,7 +57,6 @@ export default function SummaryPage() {
               .filter((p: any) => p.paymentMethod !== "CARD")
               .reduce((sum: number, p: any) => sum + p.amount, 0);
 
-          // Agregace nejprodávanějších položek z objednávek
           const productMap: Record<string, { quantity: number; revenue: number }> = {};
           for (const p of payments) {
             const items = p.order?.items || [];
@@ -93,7 +84,7 @@ export default function SummaryPage() {
           });
         }
       } catch (err) {
-        console.error("Chyba při načítání souhrnu:", err);
+        console.error("Chyba načítání dat:", err);
       } finally {
         setLoading(false);
       }
@@ -102,7 +93,6 @@ export default function SummaryPage() {
     fetchSummary();
   }, [isUnlocked]);
 
-  // Obsluha klikání na číselník
   const handlePinPress = (digit: string) => {
     if (pinInput.length >= 4) return;
     setPinError(false);
@@ -110,9 +100,8 @@ export default function SummaryPage() {
     setPinInput(nextPin);
 
     if (nextPin.length === 4) {
-      if (nextPin === MASTER_PIN) {
+      if (nextPin === getMasterPin()) {
         setIsUnlocked(true);
-        sessionStorage.setItem("summary_unlocked", "true");
         setPinInput("");
       } else {
         setPinError(true);
@@ -129,13 +118,7 @@ export default function SummaryPage() {
     setPinInput((prev) => prev.slice(0, -1));
   };
 
-  const handleLock = () => {
-    sessionStorage.removeItem("summary_unlocked");
-    setIsUnlocked(false);
-    setPinInput("");
-  };
-
-  // OBRAZOVKA ZÁMKU
+  // ZÁMEK: Při každé návštěvě vyžaduje PIN
   if (!isUnlocked) {
     return (
       <main className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 select-none">
@@ -151,7 +134,6 @@ export default function SummaryPage() {
             Zadej 4místný PIN pro zobrazení tržeb
           </p>
 
-          {/* Kuličky */}
           <div className={`flex gap-3 mb-8 transition-transform ${pinError ? "animate-shake" : ""}`}>
             {[0, 1, 2, 3].map((index) => {
               const isFilled = pinInput.length > index;
@@ -170,7 +152,6 @@ export default function SummaryPage() {
             })}
           </div>
 
-          {/* Číselník */}
           <div className="grid grid-cols-3 gap-3 w-full mb-6">
             {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((num) => (
               <button
@@ -214,12 +195,9 @@ export default function SummaryPage() {
     );
   }
 
-  // ODEMČENÝ SOUHRN
   return (
     <main className="min-h-screen bg-slate-100 p-4 sm:p-6 select-none">
       <div className="mx-auto max-w-5xl space-y-5">
-        
-        {/* Horní hlavička */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Link
@@ -234,10 +212,10 @@ export default function SummaryPage() {
           </div>
 
           <button
-            onClick={handleLock}
+            onClick={() => setIsUnlocked(false)}
             className="rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-700 shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1.5"
           >
-            🔒 Zamknout přehled
+            🔒 Zamknout
           </button>
         </div>
 
@@ -251,7 +229,6 @@ export default function SummaryPage() {
           </div>
         ) : (
           <>
-            {/* 4 hlavní statistické karty */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
                 <span className="text-xs font-bold text-slate-400 block uppercase">Tržba celkem</span>
@@ -259,21 +236,18 @@ export default function SummaryPage() {
                   {data.totalRevenue} Kč
                 </span>
               </div>
-
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
                 <span className="text-xs font-bold text-slate-400 block uppercase">💵 Hotovost</span>
                 <span className="text-2xl font-black text-emerald-600 mt-1 block">
                   {data.cashRevenue} Kč
                 </span>
               </div>
-
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
                 <span className="text-xs font-bold text-slate-400 block uppercase">💳 Kartou</span>
                 <span className="text-2xl font-black text-blue-600 mt-1 block">
                   {data.cardRevenue} Kč
                 </span>
               </div>
-
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
                 <span className="text-xs font-bold text-slate-400 block uppercase">Počet plateb</span>
                 <span className="text-2xl font-black text-slate-700 mt-1 block">
@@ -282,7 +256,6 @@ export default function SummaryPage() {
               </div>
             </div>
 
-            {/* Tržby podle stolů */}
             {data.byTable.length > 0 && (
               <div className="rounded-3xl bg-white border border-slate-200 shadow-xs p-4">
                 <h2 className="text-base font-black text-slate-900 mb-3">
@@ -306,7 +279,6 @@ export default function SummaryPage() {
               </div>
             )}
 
-            {/* Nejprodávanější položky dneška */}
             <div className="rounded-3xl bg-white border border-slate-200 shadow-xs overflow-hidden">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between">
                 <h2 className="text-base font-black text-slate-900">
@@ -336,7 +308,6 @@ export default function SummaryPage() {
                           {prod.name}
                         </span>
                       </div>
-
                       <div className="flex items-center gap-4 text-right">
                         <span className="text-xs font-bold bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg">
                           {prod.quantity} ks
@@ -352,7 +323,6 @@ export default function SummaryPage() {
             </div>
           </>
         )}
-
       </div>
     </main>
   );

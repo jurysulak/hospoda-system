@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 type KitchenItem = {
   id: number;
   name: string;
   quantity: number;
-  status: string; // "PENDING" | "DONE"
+  status: string;
   note?: string | null;
 };
 
@@ -24,17 +24,66 @@ export default function KitchenPage() {
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState<Date>(new Date());
   const [showCompleted, setShowCompleted] = useState(false);
+  const [audioEnabled, setAudioEnabled] = useState(false);
 
-  // Načtení dat ze serveru (sdílená DB pro všechna zařízení)
+  // Ukládáme si předchozí ID bonů pro detekci nové objednávky
+  const prevTicketIdsRef = useRef<Set<number>>(new Set());
+
+  // Web Audio gong pro kuchyň (Ding-Dong)
+  const playKitchenBell = () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+
+      // První tón (vyšší)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = "sine";
+      osc1.frequency.setValueAtTime(880, ctx.currentTime); // tón A5
+      gain1.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(ctx.currentTime);
+      osc1.stop(ctx.currentTime + 0.4);
+
+      // Druhý tón (nižší)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = "sine";
+      osc2.frequency.setValueAtTime(587.33, ctx.currentTime + 0.25); // tón D5
+      gain2.gain.setValueAtTime(0.3, ctx.currentTime + 0.25);
+      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.7);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(ctx.currentTime + 0.25);
+      osc2.stop(ctx.currentTime + 0.7);
+    } catch (e) {
+      console.warn("Přehrání zvuku selhalo:", e);
+    }
+  };
+
+  // Načtení dat ze serveru
   const fetchTickets = async () => {
     try {
       const res = await fetch("/api/kitchen", { cache: "no-store" });
       if (res.ok) {
-        const data = await res.json();
+        const data: KitchenTicket[] = await res.json();
+        
+        // Zjistíme, zda přibyl nový bon, který ještě v kuchyni nebyl
+        const currentIds = new Set(data.map((t) => t.orderId));
+        if (prevTicketIdsRef.current.size > 0) {
+          const hasNewTicket = data.some((t) => !prevTicketIdsRef.current.has(t.orderId));
+          if (hasNewTicket) {
+            playKitchenBell();
+          }
+        }
+        prevTicketIdsRef.current = currentIds;
         setTickets(data);
       }
     } catch (err) {
-      console.error("Chyba načítání bonů v kuchyni:", err);
+      console.error("Chyba načítání bonů:", err);
     } finally {
       setLoading(false);
     }
@@ -51,11 +100,9 @@ export default function KitchenPage() {
     };
   }, []);
 
-  // Přepnutí stavu jedné konkrétní položky (Jídla)
   const toggleItemStatus = async (itemId: number, currentStatus: string) => {
     const nextStatus = currentStatus === "DONE" ? "PENDING" : "DONE";
 
-    // Optimistická aktualizace v UI
     setTickets((prev) =>
       prev.map((t) => ({
         ...t,
@@ -73,16 +120,13 @@ export default function KitchenPage() {
       });
       fetchTickets();
     } catch (e) {
-      console.error("Chyba při ukládání stavu položky:", e);
       fetchTickets();
     }
   };
 
-  // Vydat všechny zbývající položky daného stolu najednou
   const handleMarkAllOrderDone = async (ticket: KitchenTicket) => {
     const pendingItems = ticket.items.filter((i) => i.status !== "DONE");
 
-    // Optimistický update
     setTickets((prev) =>
       prev.map((t) =>
         t.orderId === ticket.orderId
@@ -103,7 +147,6 @@ export default function KitchenPage() {
       );
       fetchTickets();
     } catch (e) {
-      console.error("Chyba při hromadném vydání:", e);
       fetchTickets();
     }
   };
@@ -114,7 +157,6 @@ export default function KitchenPage() {
     return Math.max(0, Math.floor(diffMs / 60000));
   };
 
-  // Tisk bonu včetně poznámek k jídlu
   const handlePrint = (ticket: KitchenTicket) => {
     const printWindow = window.open("", "_blank", "width=350,height=500");
     if (!printWindow) return;
@@ -169,7 +211,6 @@ export default function KitchenPage() {
     printWindow.document.close();
   };
 
-  // Filtrování bonů: aktivní mají alespoň 1 položku nevyřízenou
   const activeTickets = tickets.filter((t) =>
     t.items.some((i) => i.status !== "DONE")
   );
@@ -177,83 +218,10 @@ export default function KitchenPage() {
     t.items.every((i) => i.status === "DONE")
   );
 
-  // Souhrn pro denní raport
-  const cookedSummaryMap: Record<string, number> = {};
-  for (const t of tickets) {
-    for (const item of t.items) {
-      if (item.status === "DONE") {
-        cookedSummaryMap[item.name] =
-          (cookedSummaryMap[item.name] || 0) + item.quantity;
-      }
-    }
-  }
-
-  const cookedSummary = Object.entries(cookedSummaryMap).sort((a, b) => b[1] - a[1]);
-  const totalCookedPortions = cookedSummary.reduce((acc, [, q]) => acc + q, 0);
-
-  // Tisk raportu kuchyně
-  const handlePrintKitchenRaport = () => {
-    const printWindow = window.open("", "_blank", "width=380,height=600");
-    if (!printWindow) return;
-
-    const dateStr = now.toLocaleDateString("cs-CZ");
-    const timeStr = now.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
-
-    const rowsHtml = cookedSummary
-      .map(
-        ([name, qty]) => `
-        <div style="display:flex; justify-content:space-between; font-size:14px; font-weight:bold; padding:4px 0; border-bottom:1px dashed #ccc;">
-          <span>${name}</span>
-          <span style="font-size:16px;">${qty} ks</span>
-        </div>
-      `
-      )
-      .join("");
-
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>DENNÍ RAPORT KUCHYNĚ</title>
-          <style>
-            body { font-family: monospace; padding: 12px; margin: 0; width: 78mm; }
-            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 10px; }
-            .title { font-size: 18px; font-weight: 900; }
-            .summary { margin: 12px 0; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 8px 0; }
-            .total { display: flex; justify-content: space-between; font-size: 16px; font-weight: 900; }
-            .footer { margin-top: 20px; font-size: 11px; text-align: center; }
-            .sign { margin-top: 30px; border-top: 1px dotted #000; padding-top: 4px; text-align: center; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="title">DENNÍ RAPORT KUCHYNĚ</div>
-            <div style="font-size:12px; margin-top:2px;">Hospoda U Šuláků</div>
-            <div style="font-size:11px; color:#555; margin-top:2px;">${dateStr} • ${timeStr}</div>
-          </div>
-          <div>${rowsHtml}</div>
-          <div class="summary">
-            <div class="total">
-              <span>UVAŘENO CELKEM:</span>
-              <span>${totalCookedPortions} porcí</span>
-            </div>
-            <div style="font-size:11px; color:#555; margin-top:3px;">Kompletně vydaných stolů: ${completedTickets.length}</div>
-          </div>
-          <div class="sign">Podpis kuchaře</div>
-          <div class="footer">Konec směny - vygenerováno systémem</div>
-          <script>
-            window.onload = function() { window.print(); window.close(); }
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-  };
-
   const displayedTickets = showCompleted ? completedTickets : activeTickets;
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col select-none p-4">
-      {/* Horní lišta */}
       <header className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
         <div className="flex items-center gap-3">
           <Link
@@ -267,7 +235,23 @@ export default function KitchenPage() {
           </h1>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {/* Tlačítko pro otestování / povolení zvuku */}
+          <button
+            onClick={() => {
+              playKitchenBell();
+              setAudioEnabled(true);
+            }}
+            className={`rounded-xl px-3 py-1.5 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+              audioEnabled
+                ? "bg-emerald-950 border border-emerald-700 text-emerald-300"
+                : "bg-slate-800 hover:bg-slate-700 text-slate-300"
+            }`}
+            title="Klikni pro vyzkoušení zvuku a povolení automatického přehrávání v prohlížeči"
+          >
+            🔔 Zvuk {audioEnabled ? "aktivní" : "zapnout"}
+          </button>
+
           <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs font-bold">
             <button
               onClick={() => setShowCompleted(false)}
@@ -298,48 +282,6 @@ export default function KitchenPage() {
         </div>
       </header>
 
-      {/* ZÁLOŽKA VYDÁNO: Raport */}
-      {showCompleted && (
-        <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-lg">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
-            <div>
-              <h2 className="text-base font-black text-white flex items-center gap-2">
-                📊 Dnešní bilance uvařených jídel
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Vydáno celkem {totalCookedPortions} porcí
-              </p>
-            </div>
-
-            <button
-              onClick={handlePrintKitchenRaport}
-              disabled={totalCookedPortions === 0}
-              className="rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5"
-            >
-              🖨️ Vytisknout raport kuchyně
-            </button>
-          </div>
-
-          {cookedSummary.length > 0 && (
-            <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-              {cookedSummary.map(([name, qty]) => (
-                <div
-                  key={name}
-                  className="rounded-xl bg-slate-950 border border-slate-800 p-2.5 flex flex-col justify-between"
-                >
-                  <span className="text-xs font-bold text-slate-300 truncate">
-                    {name}
-                  </span>
-                  <span className="text-lg font-black text-amber-400 mt-1">
-                    {qty} ks
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Mřížka bonů */}
       <div className="flex-1 mt-4">
         {loading ? (
@@ -351,11 +293,6 @@ export default function KitchenPage() {
             <span className="text-5xl mb-3">{showCompleted ? "📦" : "👨‍🍳"}</span>
             <p className="text-xl font-bold text-slate-400">
               {showCompleted ? "Žádná kompletně vydaná jídla" : "Všechna jídla jsou vydána!"}
-            </p>
-            <p className="text-xs text-slate-600 mt-1">
-              {showCompleted
-                ? "Až se stůl kompletně dovaří, přesune se sem."
-                : "Jakmile obsluha markne nové jídlo, okamžitě se zde objeví."}
             </p>
           </div>
         ) : (
@@ -379,7 +316,6 @@ export default function KitchenPage() {
                       : "border-slate-800 bg-slate-900"
                   }`}
                 >
-                  {/* Hlavička */}
                   <div className="p-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/70">
                     <div>
                       <span className="text-lg font-black text-white block leading-none">
@@ -390,7 +326,7 @@ export default function KitchenPage() {
                       </span>
                     </div>
 
-                    {!showCompleted ? (
+                    {!showCompleted && (
                       <div
                         className={`text-xs font-black px-2 py-1 rounded-lg ${
                           isUrgent
@@ -402,18 +338,10 @@ export default function KitchenPage() {
                       >
                         ⏱ {waitMins} min
                       </div>
-                    ) : (
-                      <span className="text-xs font-bold text-emerald-400">
-                        ✓ Kompletně vydáno
-                      </span>
                     )}
                   </div>
 
-                  {/* Seznam položek s poznámkami a klikáním pro výdej */}
                   <div className="p-3 space-y-2 flex-1">
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-1">
-                      Klikni na jídlo pro výdej:
-                    </p>
                     {ticket.items.map((item) => {
                       const isDone = item.status === "DONE";
                       return (
@@ -466,7 +394,6 @@ export default function KitchenPage() {
                     })}
                   </div>
 
-                  {/* Spodní akce */}
                   <div className="p-3 border-t border-slate-800/80 bg-slate-900/40 flex items-center gap-2">
                     <button
                       onClick={() => handlePrint(ticket)}
@@ -476,17 +403,13 @@ export default function KitchenPage() {
                       🖨️
                     </button>
 
-                    {hasPending ? (
+                    {hasPending && (
                       <button
                         onClick={() => handleMarkAllOrderDone(ticket)}
                         className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 py-2 text-xs font-black text-white shadow transition active:scale-95 cursor-pointer"
                       >
                         ✓ Vydat celý stůl
                       </button>
-                    ) : (
-                      <span className="flex-1 text-center text-xs font-bold text-emerald-400 py-2">
-                        Všechna jídla vydána
-                      </span>
                     )}
                   </div>
                 </div>
