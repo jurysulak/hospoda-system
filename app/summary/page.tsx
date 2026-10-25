@@ -198,6 +198,7 @@ export default function SummaryPage() {
   return (
     <main className="min-h-screen bg-slate-100 p-4 sm:p-6 select-none">
       <div className="mx-auto max-w-5xl space-y-5">
+        {/* Horní hlavička */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Link
@@ -211,12 +212,21 @@ export default function SummaryPage() {
             </h1>
           </div>
 
-          <button
-            onClick={() => setIsUnlocked(false)}
-            className="rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-700 shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1.5"
-          >
-            🔒 Zamknout
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/settings"
+              className="rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-700 shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1.5"
+            >
+              ⚙️ Změnit PIN
+            </Link>
+
+            <button
+              onClick={() => setIsUnlocked(false)}
+              className="rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-700 shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1.5"
+            >
+              🔒 Zamknout
+            </button>
+          </div>
         </div>
 
         {loading ? (
