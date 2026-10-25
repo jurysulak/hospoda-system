@@ -17,6 +17,7 @@ type OrderItem = {
   productName: string;
   unitPrice: number;
   quantity: number;
+  note?: string | null;
 };
 
 type TableData = {
@@ -72,6 +73,10 @@ export default function TableDetail({
   // Stavy pro tisk bonu a účtenky
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printMode, setPrintMode] = useState<"RECEIPT" | "KITCHEN">("RECEIPT");
+
+  // Stavy pro poznámku k položce
+  const [editingItemNote, setEditingItemNote] = useState<OrderItem | null>(null);
+  const [itemNoteText, setItemNoteText] = useState("");
 
   useEffect(() => {
     params.then(({ id }) => {
@@ -150,6 +155,18 @@ export default function TableDetail({
     await fetch(`/api/order-items/${itemId}/remove`, {
       method: "POST",
     });
+    await loadData(tableId);
+  }
+
+  // Uložení poznámky k položce
+  async function saveItemNote() {
+    if (!editingItemNote) return;
+    await fetch(`/api/order-items/${editingItemNote.id}/note`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: itemNoteText }),
+    });
+    setEditingItemNote(null);
     await loadData(tableId);
   }
 
@@ -295,7 +312,6 @@ export default function TableDetail({
   const amountToPay = isPayMode && selectedTotal > 0 ? selectedTotal : total;
   const isReserved = table?.status === "reserved" && items.length === 0;
 
-  // Cílová sekce pro návrat zpět na mapu stolů
   const sectionSlug =
     table?.section === "Zahrádka"
       ? "zahradka"
@@ -474,9 +490,26 @@ export default function TableDetail({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <div className="font-bold text-slate-900 truncate text-sm">
-                          {item.productName}
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-slate-900 truncate text-sm">
+                            {item.productName}
+                          </span>
+                          <button
+                            onClick={() => {
+                              setEditingItemNote(item);
+                              setItemNoteText(item.note || "");
+                            }}
+                            className="text-xs text-slate-400 hover:text-slate-700 transition cursor-pointer"
+                            title="Přidat nebo upravit poznámku"
+                          >
+                            ✏️
+                          </button>
                         </div>
+                        {item.note && (
+                          <div className="text-[11px] font-bold text-amber-700 italic">
+                            ↳ {item.note}
+                          </div>
+                        )}
                         <div className="text-xs text-slate-500 font-medium">
                           {item.unitPrice} Kč / ks
                         </div>
@@ -792,6 +825,71 @@ export default function TableDetail({
         totalAmount={total}
         mode={printMode}
       />
+
+      {/* MODAL 5: Poznámka k položce */}
+      {editingItemNote && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-xl font-black text-slate-900">
+              Poznámka k položce
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 font-bold">
+              {editingItemNote.productName}
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <input
+                type="text"
+                placeholder="např. Bez cibule, S sebou..."
+                value={itemNoteText}
+                onChange={(e) => setItemNoteText(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900"
+                autoFocus
+              />
+
+              {/* Rychlé předvolby */}
+              <div className="flex flex-wrap gap-1.5">
+                {["S sebou", "Bez cibule", "Tatarka navíc", "Bez ledu", "Propečený"].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setItemNoteText(preset)}
+                    className="rounded-lg bg-slate-100 hover:bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 transition cursor-pointer"
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-2">
+              <button
+                onClick={saveItemNote}
+                className="w-full rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-95 py-3 text-sm font-bold text-white shadow transition cursor-pointer"
+              >
+                Uložit poznámku
+              </button>
+              {editingItemNote.note && (
+                <button
+                  onClick={() => {
+                    setItemNoteText("");
+                    saveItemNote();
+                  }}
+                  className="w-full rounded-2xl border border-red-200 bg-red-50 hover:bg-red-100 py-2 text-xs font-bold text-red-600 transition cursor-pointer"
+                >
+                  Smazat poznámku
+                </button>
+              )}
+              <button
+                onClick={() => setEditingItemNote(null)}
+                className="w-full rounded-2xl bg-slate-100 hover:bg-slate-200 py-2.5 text-xs font-semibold text-slate-600 transition cursor-pointer"
+              >
+                Zrušit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

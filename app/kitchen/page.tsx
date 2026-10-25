@@ -8,6 +8,7 @@ type KitchenItem = {
   name: string;
   quantity: number;
   status: string; // "PENDING" | "DONE"
+  note?: string | null;
 };
 
 type KitchenTicket = {
@@ -113,7 +114,7 @@ export default function KitchenPage() {
     return Math.max(0, Math.floor(diffMs / 60000));
   };
 
-  // Tisk bonu
+  // Tisk bonu včetně poznámek k jídlu
   const handlePrint = (ticket: KitchenTicket) => {
     const printWindow = window.open("", "_blank", "width=350,height=500");
     if (!printWindow) return;
@@ -126,9 +127,16 @@ export default function KitchenPage() {
     const itemsHtml = ticket.items
       .map(
         (item) => `
-        <div style="display:flex; justify-content:space-between; font-size:16px; font-weight:bold; margin-bottom:6px;">
-          <span style="${item.status === "DONE" ? "text-decoration: line-through; opacity: 0.5;" : ""}">${item.name}</span>
-          <span style="background:#000; color:#fff; padding:1px 6px; border-radius:4px;">${item.quantity}×</span>
+        <div style="margin-bottom:8px; border-bottom:1px dashed #ddd; padding-bottom:4px;">
+          <div style="display:flex; justify-content:space-between; font-size:16px; font-weight:bold;">
+            <span style="${item.status === "DONE" ? "text-decoration: line-through; opacity: 0.5;" : ""}">${item.name}</span>
+            <span style="background:#000; color:#fff; padding:1px 6px; border-radius:4px;">${item.quantity}×</span>
+          </div>
+          ${
+            item.note
+              ? `<div style="font-size:13px; font-weight:900; color:#b45309; margin-top:2px; padding-left:4px;">↳ POZN: ${item.note}</div>`
+              : ""
+          }
         </div>
       `
       )
@@ -401,7 +409,7 @@ export default function KitchenPage() {
                     )}
                   </div>
 
-                  {/* Seznam položek s klikací možností vydat jednotlivě */}
+                  {/* Seznam položek s poznámkami a klikáním pro výdej */}
                   <div className="p-3 space-y-2 flex-1">
                     <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-1">
                       Klikni na jídlo pro výdej:
@@ -418,9 +426,9 @@ export default function KitchenPage() {
                               : "border-slate-700 bg-slate-800 hover:border-amber-500 text-white"
                           }`}
                         >
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
                             <span
-                              className={`w-5 h-5 rounded-md flex items-center justify-center text-xs font-black ${
+                              className={`w-5 h-5 rounded-md flex items-center justify-center text-xs font-black shrink-0 ${
                                 isDone
                                   ? "bg-emerald-500 text-slate-950"
                                   : "border border-slate-500 text-transparent"
@@ -428,17 +436,24 @@ export default function KitchenPage() {
                             >
                               ✓
                             </span>
-                            <span
-                              className={`font-extrabold text-sm ${
-                                isDone ? "line-through opacity-60" : ""
-                              }`}
-                            >
-                              {item.name}
-                            </span>
+                            <div className="flex flex-col min-w-0">
+                              <span
+                                className={`font-extrabold text-sm truncate ${
+                                  isDone ? "line-through opacity-60" : ""
+                                }`}
+                              >
+                                {item.name}
+                              </span>
+                              {item.note && (
+                                <span className="text-xs font-bold text-amber-400 italic">
+                                  ↳ {item.note}
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           <span
-                            className={`font-black text-xs px-2 py-0.5 rounded ${
+                            className={`font-black text-xs px-2 py-0.5 rounded shrink-0 ml-2 ${
                               isDone
                                 ? "bg-emerald-900/50 text-emerald-300"
                                 : "bg-white text-slate-950"

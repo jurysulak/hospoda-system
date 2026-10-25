@@ -75,6 +75,7 @@ model OrderItem {
   unitPrice   Int      // Historická záloha jednotkové ceny
   quantity    Int
   status      String   @default("PENDING") // "PENDING" (vaří se) | "DONE" (vydáno)
+  note        String?  // např. "bez cibule", "s sebou", "propečený"
   payerName   String?  // Užitečné pro rozpočítání účtu mezi hosty
   createdAt   DateTime @default(now())
 

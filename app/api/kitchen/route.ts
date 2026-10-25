@@ -57,6 +57,7 @@ export async function GET() {
             name: item.productName,
             quantity: item.quantity,
             status: item.status || "PENDING",
+            note: item.note || null,
           })),
         };
       })
