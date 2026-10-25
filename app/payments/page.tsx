@@ -2,272 +2,189 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-type PaymentItem = {
+type PaymentRecord = {
   id: number;
   amount: number;
   paymentMethod: string;
   createdAt: string;
   order: {
+    id: number;
     table: {
+      id: number;
       name: string;
-    };
+      section: string;
+    } | null;
+    items: {
+      id: number;
+      productName: string;
+      quantity: number;
+      unitPrice: number;
+    }[];
   };
 };
 
-type SummaryData = {
-  date: string;
-  totalAmount: number;
-  cashTotal: number;
-  cardTotal: number;
-  paymentCount: number;
-  payments: PaymentItem[];
-  byTable: { tableName: string; amount: number }[];
-};
-
 export default function PaymentsPage() {
-  const [selectedDate, setSelectedDate] = useState(() => {
-    return new Date().toISOString().split("T")[0];
-  });
-  const [summary, setSummary] = useState<SummaryData | null>(null);
+  const router = useRouter();
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefunding, setIsRefunding] = useState<number | null>(null);
 
-  async function loadSummary(dateStr: string) {
-    setLoading(true);
+  // Načtení historie plateb
+  const loadPayments = async () => {
     try {
-      const res = await fetch(`/api/payments/summary?date=${dateStr}`, {
-        cache: "no-store",
-      });
+      const res = await fetch("/api/payments", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
-        setSummary(data);
+        setPayments(data);
       }
     } catch (e) {
-      console.error("Chyba při stahování uzávěrky:", e);
+      console.error("Chyba načítání plateb:", e);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    loadSummary(selectedDate);
-  }, [selectedDate]);
+    loadPayments();
+  }, []);
 
-  function shiftDay(days: number) {
-    const d = new Date(selectedDate);
-    d.setDate(d.getDate() + days);
-    setSelectedDate(d.toISOString().split("T")[0]);
-  }
+  // Provedení storna
+  const handleRefund = async (payment: PaymentRecord) => {
+    const tableName = payment.order?.table?.name || "Neznámý stůl";
+    if (
+      !window.confirm(
+        `Opravdu chceš STORNOVAT platbu ${payment.amount} Kč (${tableName})?\n\nStůl bude znovu otevřen se všemi položkami pro opravu.`
+      )
+    ) {
+      return;
+    }
 
-  const isToday =
-    selectedDate === new Date().toISOString().split("T")[0];
+    try {
+      setIsRefunding(payment.id);
+      const res = await fetch(`/api/payments/${payment.id}/refund`, {
+        method: "POST",
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        alert("Platba byla úspěšně stornována a stůl je znovu otevřen.");
+        if (data.tableId) {
+          router.push(`/tables/${data.tableId}`);
+        } else {
+          await loadPayments();
+        }
+      } else {
+        const err = await res.json();
+        alert(err.error || "Storno se nezdařilo");
+      }
+    } catch (e) {
+      alert("Chyba při komunikaci se serverem");
+    } finally {
+      setIsRefunding(null);
+    }
+  };
 
   return (
-    <main className="min-h-screen bg-slate-100 p-4 md:p-6 lg:p-8">
-      <div className="mx-auto max-w-5xl space-y-6">
-        {/* Horní navigační lišta */}
-        <header className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-white p-5 shadow-xs">
+    <main className="min-h-screen bg-slate-100 p-4 sm:p-6 select-none">
+      <div className="mx-auto max-w-5xl space-y-5">
+        
+        {/* Horní hlavička */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="rounded-2xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition"
+              className="rounded-xl bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 transition"
             >
-              ← Zpět k mapě stolů
+              ← Zpět
             </Link>
-            <h1 className="text-2xl font-black text-slate-900">
-              Denní tržby a uzávěrka
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+              Správa plateb a storno
             </h1>
           </div>
+          <span className="text-xs font-bold text-slate-500">
+            Zobrazeno {payments.length} posledních plateb
+          </span>
+        </div>
 
-          {/* Přepínání data */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => shiftDay(-1)}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50 transition"
-            >
-              ←
-            </button>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-slate-900"
-            />
-            <button
-              onClick={() => shiftDay(1)}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50 transition"
-            >
-              →
-            </button>
-            {!isToday && (
-              <button
-                onClick={() =>
-                  setSelectedDate(new Date().toISOString().split("T")[0])
-                }
-                className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-slate-800"
-              >
-                Dnes
-              </button>
-            )}
-          </div>
-        </header>
-
-        {loading ? (
-          <div className="rounded-3xl bg-white p-12 text-center text-slate-400 font-semibold shadow-xs">
-            Načítám přehled tržeb...
-          </div>
-        ) : !summary ? (
-          <div className="rounded-3xl bg-white p-12 text-center text-red-500 font-semibold shadow-xs">
-            Nepodařilo se načíst data pro vybraný den.
-          </div>
-        ) : (
-          <>
-            {/* 3 Souhrnné karty */}
-            <div className="grid gap-4 sm:grid-cols-3">
-              {/* Celková tržba */}
-              <div className="rounded-3xl bg-slate-900 p-6 text-white shadow-sm flex flex-col justify-between">
-                <div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Celková tržba
-                  </span>
-                  <div className="mt-2 text-4xl font-black">
-                    {summary.totalAmount} Kč
-                  </div>
-                </div>
-                <div className="mt-4 text-xs font-semibold text-slate-400">
-                  Počet transakcí: {summary.paymentCount}
-                </div>
-              </div>
-
-              {/* Hotovost */}
-              <div className="rounded-3xl bg-white p-6 border border-emerald-100 shadow-xs flex flex-col justify-between">
-                <div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
-                    💵 Hotovost
-                  </span>
-                  <div className="mt-2 text-3xl font-black text-slate-900">
-                    {summary.cashTotal} Kč
-                  </div>
-                </div>
-                <div className="mt-4 text-xs font-semibold text-slate-500">
-                  {summary.totalAmount > 0
-                    ? `${Math.round(
-                        (summary.cashTotal / summary.totalAmount) * 100
-                      )} % z celkové tržby`
-                    : "0 %"}
-                </div>
-              </div>
-
-              {/* Karty */}
-              <div className="rounded-3xl bg-white p-6 border border-blue-100 shadow-xs flex flex-col justify-between">
-                <div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
-                    💳 Platební karty
-                  </span>
-                  <div className="mt-2 text-3xl font-black text-slate-900">
-                    {summary.cardTotal} Kč
-                  </div>
-                </div>
-                <div className="mt-4 text-xs font-semibold text-slate-500">
-                  {summary.totalAmount > 0
-                    ? `${Math.round(
-                        (summary.cardTotal / summary.totalAmount) * 100
-                      )} % z celkové tržby`
-                    : "0 %"}
-                </div>
-              </div>
+        {/* Tabulka plateb */}
+        <div className="rounded-3xl bg-white shadow-xs border border-slate-200 overflow-hidden">
+          {loading ? (
+            <div className="p-8 text-center text-slate-400 font-bold text-sm">
+              Načítám platby...
             </div>
-
-            {/* Dva sloupce: Přehled podle stolů a Detailní výpis plateb */}
-            <div className="grid gap-6 md:grid-cols-[1fr_1.6fr]">
-              {/* Tržby podle stolů */}
-              <div className="rounded-3xl bg-white p-6 shadow-xs">
-                <h2 className="text-lg font-extrabold text-slate-900 mb-4">
-                  Tržby podle stolů
-                </h2>
-                {summary.byTable.length === 0 ? (
-                  <p className="text-sm text-slate-400">Žádné tržby pro tento den.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {summary.byTable.map((t) => (
-                      <div
-                        key={t.tableName}
-                        className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100"
-                      >
-                        <span className="font-bold text-slate-800 text-sm">
-                          {t.tableName}
-                        </span>
-                        <span className="font-black text-slate-900 text-base">
-                          {t.amount} Kč
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Historie plateb dne */}
-              <div className="rounded-3xl bg-white p-6 shadow-xs">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-extrabold text-slate-900">
-                    Jednotlivé platby ({summary.payments.length})
-                  </h2>
-                  <button
-                    onClick={() => window.print()}
-                    className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
-                  >
-                    🖨️ Tisk uzávěrky
-                  </button>
-                </div>
-
-                {summary.payments.length === 0 ? (
-                  <p className="text-sm text-slate-400">V tento den neproběhly žádné platby.</p>
-                ) : (
-                  <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto pr-1">
-                    {summary.payments.map((p) => {
-                      const time = new Date(p.createdAt).toLocaleTimeString(
-                        "cs-CZ",
-                        { hour: "2-digit", minute: "2-digit" }
-                      );
-                      const isCard = p.paymentMethod === "CARD";
-
-                      return (
-                        <div
-                          key={p.id}
-                          className="flex items-center justify-between py-3"
-                        >
-                          <div className="flex items-center gap-3">
-                            <span
-                              className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold ${
-                                isCard
-                                  ? "bg-blue-100 text-blue-700"
-                                  : "bg-emerald-100 text-emerald-700"
-                              }`}
-                            >
-                              {isCard ? "💳" : "💵"}
-                            </span>
-                            <div>
-                              <div className="font-bold text-slate-900 text-sm">
-                                {p.order.table?.name || "Stůl"}
-                              </div>
-                              <div className="text-xs text-slate-400">
-                                {time} • {isCard ? "Karta" : "Hotovost"}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="font-black text-slate-900 text-base">
-                            {p.amount} Kč
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+          ) : payments.length === 0 ? (
+            <div className="p-12 text-center text-slate-400">
+              <span className="text-4xl block mb-2">🧾</span>
+              <p className="font-bold">Zatím nebyly provedeny žádné platby.</p>
             </div>
-          </>
-        )}
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200 text-xs font-bold uppercase text-slate-500">
+                  <tr>
+                    <th className="px-5 py-3.5">Čas</th>
+                    <th className="px-5 py-3.5">Stůl / Prostor</th>
+                    <th className="px-5 py-3.5">Způsob</th>
+                    <th className="px-5 py-3.5">Částka</th>
+                    <th className="px-5 py-3.5 text-right">Akce</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {payments.map((p) => {
+                    const time = new Date(p.createdAt).toLocaleTimeString("cs-CZ", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    });
+                    const date = new Date(p.createdAt).toLocaleDateString("cs-CZ");
+
+                    return (
+                      <tr key={p.id} className="hover:bg-slate-50/60 transition">
+                        <td className="px-5 py-3.5">
+                          <span className="font-bold text-slate-900 block">{time}</span>
+                          <span className="text-[11px] text-slate-400">{date}</span>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span className="font-bold text-slate-900 block">
+                            {p.order?.table?.name || "Stůl"}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {p.order?.table?.section || "Vnitřek"}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span
+                            className={`inline-block px-2.5 py-1 rounded-lg text-xs font-black ${
+                              p.paymentMethod === "CARD"
+                                ? "bg-blue-100 text-blue-800"
+                                : "bg-emerald-100 text-emerald-800"
+                            }`}
+                          >
+                            {p.paymentMethod === "CARD" ? "💳 Kartou" : "💵 Hotově"}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 font-black text-base text-slate-900">
+                          {p.amount} Kč
+                        </td>
+                        <td className="px-5 py-3.5 text-right">
+                          <button
+                            onClick={() => handleRefund(p)}
+                            disabled={isRefunding === p.id}
+                            className="rounded-xl border border-red-300 bg-red-50 hover:bg-red-100 px-3 py-1.5 text-xs font-black text-red-700 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                          >
+                            {isRefunding === p.id ? "Stornuji..." : "⚠️ Stornovat"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
       </div>
     </main>
   );
