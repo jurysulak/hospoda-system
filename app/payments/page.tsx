@@ -50,15 +50,6 @@ export default function PaymentsPage() {
     loadPayments();
   }, []);
 
-  // Součty pro horní statistické karty
-  const totalSum = payments.reduce((sum, p) => sum + p.amount, 0);
-  const cashSum = payments
-    .filter((p) => p.paymentMethod !== "CARD")
-    .reduce((sum, p) => sum + p.amount, 0);
-  const cardSum = payments
-    .filter((p) => p.paymentMethod === "CARD")
-    .reduce((sum, p) => sum + p.amount, 0);
-
   // Provedení storna
   const handleRefund = async (payment: PaymentRecord) => {
     const tableName = payment.order?.table?.name || "Neznámý stůl";
@@ -99,7 +90,7 @@ export default function PaymentsPage() {
     <main className="min-h-screen bg-slate-100 p-4 sm:p-6 select-none">
       <div className="mx-auto max-w-5xl space-y-5">
         
-        {/* Horní hlavička */}
+        {/* Horní hlavička bez tržeb */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Link
@@ -109,43 +100,12 @@ export default function PaymentsPage() {
               ← Zpět
             </Link>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-              Správa plateb a storno
+              Historie plateb a storno
             </h1>
           </div>
           <span className="text-xs font-bold text-slate-500">
             Zobrazeno {payments.length} posledních plateb
           </span>
-        </div>
-
-        {/* HORNÍ SOUHRNNÉ KARTY */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span className="text-xs font-bold text-slate-400 block uppercase">Tržba celkem</span>
-            <span className="text-2xl font-black text-slate-900 mt-1 block">
-              {totalSum} Kč
-            </span>
-          </div>
-
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span className="text-xs font-bold text-slate-400 block uppercase">💵 Hotovost</span>
-            <span className="text-2xl font-black text-emerald-600 mt-1 block">
-              {cashSum} Kč
-            </span>
-          </div>
-
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span className="text-xs font-bold text-slate-400 block uppercase">💳 Kartou</span>
-            <span className="text-2xl font-black text-blue-600 mt-1 block">
-              {cardSum} Kč
-            </span>
-          </div>
-
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span className="text-xs font-bold text-slate-400 block uppercase">Počet plateb</span>
-            <span className="text-2xl font-black text-slate-700 mt-1 block">
-              {payments.length}×
-            </span>
-          </div>
         </div>
 
         {/* Tabulka plateb */}
