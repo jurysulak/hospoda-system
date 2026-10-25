@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 // -------------------------------------------------------------
-// NASTAVENÍ TVÉHO PINU (změň si podle sebe)
+// TVŮJ VLASTNÍ PIN KÓD PRO ODEMČENÍ SOUHRNU
 // -------------------------------------------------------------
 const MASTER_PIN = "1234";
 
@@ -28,7 +28,7 @@ export default function SummaryPage() {
   const [data, setData] = useState<SummaryData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Kontrola, zda už byl PIN zadán v této relaci
+  // Kontrola, zda už byl PIN v této relaci zadán
   useEffect(() => {
     const unlocked = sessionStorage.getItem("summary_unlocked");
     if (unlocked === "true") {
@@ -65,7 +65,6 @@ export default function SummaryPage() {
     const nextPin = pinInput + digit;
     setPinInput(nextPin);
 
-    // Automatické ověření po zadání 4 číslic
     if (nextPin.length === 4) {
       if (nextPin === MASTER_PIN) {
         setIsUnlocked(true);
@@ -92,9 +91,7 @@ export default function SummaryPage() {
     setPinInput("");
   };
 
-  // -------------------------------------------------------------
-  // OBRAZOVKA ČÍSELNÉHO ZÁMKU (POKUD JE ZAMČENO)
-  // -------------------------------------------------------------
+  // OBRAZOVKA ZÁMKU
   if (!isUnlocked) {
     return (
       <main className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 select-none">
@@ -111,7 +108,7 @@ export default function SummaryPage() {
             Zadej 4místný PIN pro zobrazení tržeb
           </p>
 
-          {/* Indikátory zadaných číslic (kuličky) */}
+          {/* Kuličky */}
           <div className={`flex gap-3 mb-8 transition-transform ${pinError ? "animate-shake" : ""}`}>
             {[0, 1, 2, 3].map((index) => {
               const isFilled = pinInput.length > index;
@@ -130,7 +127,7 @@ export default function SummaryPage() {
             })}
           </div>
 
-          {/* Dotyková číselná klávesnice */}
+          {/* Číselník */}
           <div className="grid grid-cols-3 gap-3 w-full mb-6">
             {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((num) => (
               <button
@@ -174,14 +171,11 @@ export default function SummaryPage() {
     );
   }
 
-  // -------------------------------------------------------------
-  // ODEMČENÁ STRÁNKA DENNÍHO SOUHRNU
-  // -------------------------------------------------------------
+  // ODEMČENÝ SOUHRN
   return (
     <main className="min-h-screen bg-slate-100 p-4 sm:p-6 select-none">
       <div className="mx-auto max-w-5xl space-y-5">
         
-        {/* Horní hlavička */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Link
@@ -213,7 +207,6 @@ export default function SummaryPage() {
           </div>
         ) : (
           <>
-            {/* Souhrnné karty tržby */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
                 <span className="text-xs font-bold text-slate-400 block uppercase">Tržba celkem</span>
@@ -244,7 +237,6 @@ export default function SummaryPage() {
               </div>
             </div>
 
-            {/* Top prodávané položky dneška */}
             <div className="rounded-3xl bg-white border border-slate-200 shadow-xs overflow-hidden">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between">
                 <h2 className="text-base font-black text-slate-900">
