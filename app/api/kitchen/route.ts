@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// Kategorie, které patří do kuchyně (vše ostatní zůstává baru)
 const KITCHEN_CATEGORIES = [
   "Jídlo",
   "Chuťovky",
@@ -13,7 +12,6 @@ const KITCHEN_CATEGORIES = [
 
 export async function GET() {
   try {
-    // 1. Zjistíme názvy produktů, které patří do kuchyňských kategorií
     const kitchenProducts = await prisma.product.findMany({
       where: {
         category: {
@@ -28,7 +26,6 @@ export async function GET() {
 
     const kitchenProductNames = new Set(kitchenProducts.map((p) => p.name));
 
-    // 2. Načteme otevřené objednávky i se stoly
     const openOrders = await prisma.order.findMany({
       where: {
         status: "open",
@@ -42,7 +39,6 @@ export async function GET() {
       },
     });
 
-    // 3. Z každé objednávky vyfiltrujeme pouze jídla
     const kitchenTickets = openOrders
       .map((order) => {
         const foodItems = order.items.filter((item) =>
@@ -60,6 +56,7 @@ export async function GET() {
             id: item.id,
             name: item.productName,
             quantity: item.quantity,
+            status: item.status || "PENDING",
           })),
         };
       })

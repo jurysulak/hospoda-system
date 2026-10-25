@@ -9,41 +9,41 @@ generator client {
 // -------------------------------------------------------------
 // STOLY A PROSTOR
 // -------------------------------------------------------------
-// prisma/schema.prisma
 
 model Table {
-  id        Int      @id @default(autoincrement())
-  name      String
-  section   String   @default("Vnitřek")
-  status    String   @default("open") // "open", "occupied", "reserved"
+  id           Int      @id @default(autoincrement())
+  name         String
+  section      String   @default("Vnitřek")
+  status       String   @default("open") // "open", "occupied", "reserved"
 
   // Údaje o rezervaci
   reservedName String?
-  reservedTime String? // např. "18:30"
-  reservedPax  Int?    // počet osob (např. 4)
+  reservedTime String?  // např. "18:30"
+  reservedPax  Int?     // počet osob (např. 4)
 
-  posX      Int      @default(0)
-  posY      Int      @default(0)
-  width     Int      @default(110)
-  height    Int      @default(80)
+  posX         Int      @default(0)
+  posY         Int      @default(0)
+  width        Int      @default(110)
+  height       Int      @default(80)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  orders    Order[]
+  orders       Order[]
 }
 
 // -------------------------------------------------------------
 // JÍDELNÍ & NÁPOJOVÝ LÍSTEK
 // -------------------------------------------------------------
+
 model Product {
-  id          Int      @id @default(autoincrement())
+  id          Int             @id @default(autoincrement())
   name        String
-  category    String   // např. "Pivo", "Nealko", "Jídlo"
-  price       Int      // cena v celých jednotkách (např. CZK)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  category    String          // např. "Pivo", "Nealko", "Jídlo"
+  price       Int             // cena v celých jednotkách (např. CZK)
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   orderItems  OrderItem[]
   recipeItems ProductRecipe[] // Receptura: z jakých surovin se skládá
@@ -52,13 +52,14 @@ model Product {
 // -------------------------------------------------------------
 // ÚČTY A OBJEDNÁVKY
 // -------------------------------------------------------------
+
 model Order {
-  id        Int       @id @default(autoincrement())
-  tableId   Int
-  status    String    @default("open") // "open", "paid", "cancelled"
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  closedAt  DateTime?
+  id             Int             @id @default(autoincrement())
+  tableId        Int
+  status         String          @default("open") // "open", "paid", "cancelled"
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  closedAt       DateTime?
 
   table          Table           @relation(fields: [tableId], references: [id])
   items          OrderItem[]
@@ -73,6 +74,7 @@ model OrderItem {
   productName String   // Historická záloha názvu v momentě prodeje
   unitPrice   Int      // Historická záloha jednotkové ceny
   quantity    Int
+  status      String   @default("PENDING") // "PENDING" (vaří se) | "DONE" (vydáno)
   payerName   String?  // Užitečné pro rozpočítání účtu mezi hosty
   createdAt   DateTime @default(now())
 
@@ -94,12 +96,13 @@ model Payment {
 // -------------------------------------------------------------
 // SKLADOVÉ HOSPODÁŘSTVÍ
 // -------------------------------------------------------------
+
 model StockItem {
   id          Int             @id @default(autoincrement())
   name        String          // např. "Radegast 12 sud", "Kofola sirup"
   unit        String          @default("ks") // "ks", "l", "kg"
   quantity    Float           @default(0)
-  minQuantity Float           @default(0)   // Upozornění na docházející zásoby
+  minQuantity Float           @default(0)    // Upozornění na docházející zásoby
   isActive    Boolean         @default(true)
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
@@ -108,8 +111,6 @@ model StockItem {
   recipes     ProductRecipe[]
 }
 
-// Receptura spojuje prodejní artikl se surovinou na skladě
-// Příklad: 1x Velké Pivo = odpis 0.5 jednotky ze sudu
 model ProductRecipe {
   id          Int       @id @default(autoincrement())
   productId   Int
@@ -123,14 +124,14 @@ model ProductRecipe {
 }
 
 model StockMovement {
-  id          Int        @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   stockItemId Int
-  orderId     Int?       // Volitelná vazba na účet při automatickém odpisu
-  type        String     // "sale" (prodej), "restock" (naskladnění), "waste" (odpis/ztráta)
-  quantity    Float      // Kladné číslo pro naskladnění, záporné pro odpis
+  orderId     Int?      // Volitelná vazba na účet při automatickém odpisu
+  type        String    // "sale", "restock", "waste"
+  quantity    Float
   note        String?
-  createdAt   DateTime   @default(now())
+  createdAt   DateTime  @default(now())
 
-  stockItem   StockItem  @relation(fields: [stockItemId], references: [id])
-  order       Order?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id])
+  order       Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
 }
