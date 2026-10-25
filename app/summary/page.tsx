@@ -1,322 +1,296 @@
-export const dynamic = "force-dynamic";
+"use client";
 
-import { prisma } from "@/lib/prisma";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
-export default async function SummaryPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ date?: string }> | { date?: string };
-}) {
-  const resolvedParams = searchParams ? await Promise.resolve(searchParams) : {};
-  const queryDate = resolvedParams.date;
+// -------------------------------------------------------------
+// NASTAVENÍ TVÉHO PINU (změň si podle sebe)
+// -------------------------------------------------------------
+const MASTER_PIN = "1234";
 
-  // Výběr data (výchozí je dnešek v lokálním čase)
-  const targetDate = queryDate ? new Date(queryDate) : new Date();
+type SummaryData = {
+  totalRevenue: number;
+  cashRevenue: number;
+  cardRevenue: number;
+  orderCount: number;
+  topProducts: {
+    name: string;
+    quantity: number;
+    revenue: number;
+  }[];
+};
 
-  const startOfDay = new Date(
-    targetDate.getFullYear(),
-    targetDate.getMonth(),
-    targetDate.getDate(),
-    0,
-    0,
-    0,
-    0
-  );
+export default function SummaryPage() {
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState(false);
 
-  const endOfDay = new Date(
-    targetDate.getFullYear(),
-    targetDate.getMonth(),
-    targetDate.getDate(),
-    23,
-    59,
-    59,
-    999
-  );
+  const [data, setData] = useState<SummaryData | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Načtení plateb bezpečně s ošetřením chyb
-  let payments: any[] = [];
-  try {
-    payments = await prisma.payment.findMany({
-      where: {
-        createdAt: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
-      },
-      include: {
-        order: {
-          include: {
-            table: true,
-            items: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-  } catch (err) {
-    console.error("Chyba při dotazu na platby:", err);
-  }
-
-  // Celková částka a počet plateb
-  const totalAmount = payments.reduce(
-    (sum: number, p: any) => sum + (p.amount ?? 0),
-    0
-  );
-  const paymentCount = payments.length;
-
-  // Rozpad Hotovost vs Karta
-  const cashAmount = payments
-    .filter((p: any) => !p.paymentMethod || p.paymentMethod.toUpperCase() === "CASH")
-    .reduce((sum: number, p: any) => sum + (p.amount ?? 0), 0);
-
-  const cardAmount = payments
-    .filter((p: any) => p.paymentMethod && p.paymentMethod.toUpperCase() === "CARD")
-    .reduce((sum: number, p: any) => sum + (p.amount ?? 0), 0);
-
-  // Souhrn podle stolů
-  const byTableMap: Record<string, { amount: number; count: number }> = {};
-  for (const payment of payments) {
-    const tableName = payment.order?.table?.name ?? "Neznámý stůl";
-    if (!byTableMap[tableName]) {
-      byTableMap[tableName] = { amount: 0, count: 0 };
+  // Kontrola, zda už byl PIN zadán v této relaci
+  useEffect(() => {
+    const unlocked = sessionStorage.getItem("summary_unlocked");
+    if (unlocked === "true") {
+      setIsUnlocked(true);
     }
-    byTableMap[tableName].amount += payment.amount ?? 0;
-    byTableMap[tableName].count += 1;
-  }
+  }, []);
 
-  const byTable = Object.entries(byTableMap).sort(
-    (a, b) => b[1].amount - a[1].amount
-  );
+  // Načtení dat souhrnu po odemčení
+  useEffect(() => {
+    if (!isUnlocked) return;
 
-  // Souhrn podle položek
-  const itemsMap: Record<string, { qty: number; total: number }> = {};
-  for (const payment of payments) {
-    const items = payment.order?.items ?? [];
-    for (const item of items) {
-      if (!itemsMap[item.productName]) {
-        itemsMap[item.productName] = { qty: 0, total: 0 };
+    async function fetchSummary() {
+      try {
+        setLoading(true);
+        const res = await fetch("/api/summary", { cache: "no-store" });
+        if (res.ok) {
+          const json = await res.json();
+          setData(json);
+        }
+      } catch (err) {
+        console.error("Chyba při načítání souhrnu:", err);
+      } finally {
+        setLoading(false);
       }
-      itemsMap[item.productName].qty += item.quantity;
-      itemsMap[item.productName].total += item.quantity * item.unitPrice;
     }
+
+    fetchSummary();
+  }, [isUnlocked]);
+
+  // Obsluha klikání na číselník
+  const handlePinPress = (digit: string) => {
+    if (pinInput.length >= 4) return;
+    setPinError(false);
+    const nextPin = pinInput + digit;
+    setPinInput(nextPin);
+
+    // Automatické ověření po zadání 4 číslic
+    if (nextPin.length === 4) {
+      if (nextPin === MASTER_PIN) {
+        setIsUnlocked(true);
+        sessionStorage.setItem("summary_unlocked", "true");
+        setPinInput("");
+      } else {
+        setPinError(true);
+        setTimeout(() => {
+          setPinInput("");
+          setPinError(false);
+        }, 600);
+      }
+    }
+  };
+
+  const handleBackspace = () => {
+    setPinError(false);
+    setPinInput((prev) => prev.slice(0, -1));
+  };
+
+  const handleLock = () => {
+    sessionStorage.removeItem("summary_unlocked");
+    setIsUnlocked(false);
+    setPinInput("");
+  };
+
+  // -------------------------------------------------------------
+  // OBRAZOVKA ČÍSELNÉHO ZÁMKU (POKUD JE ZAMČENO)
+  // -------------------------------------------------------------
+  if (!isUnlocked) {
+    return (
+      <main className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 select-none">
+        <div className="w-full max-w-xs flex flex-col items-center animate-in fade-in zoom-in-95 duration-200">
+          
+          <div className="w-16 h-16 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center text-2xl shadow-xl mb-4">
+            🔒
+          </div>
+
+          <h1 className="text-xl font-black text-white tracking-tight">
+            Denní souhrn je uzamčen
+          </h1>
+          <p className="text-xs text-slate-400 mt-1 mb-6 text-center">
+            Zadej 4místný PIN pro zobrazení tržeb
+          </p>
+
+          {/* Indikátory zadaných číslic (kuličky) */}
+          <div className={`flex gap-3 mb-8 transition-transform ${pinError ? "animate-shake" : ""}`}>
+            {[0, 1, 2, 3].map((index) => {
+              const isFilled = pinInput.length > index;
+              return (
+                <div
+                  key={index}
+                  className={`w-4 h-4 rounded-full transition-all duration-200 ${
+                    pinError
+                      ? "bg-red-500 scale-110"
+                      : isFilled
+                      ? "bg-amber-400 scale-110 shadow-lg shadow-amber-400/50"
+                      : "bg-slate-800 border border-slate-700"
+                  }`}
+                />
+              );
+            })}
+          </div>
+
+          {/* Dotyková číselná klávesnice */}
+          <div className="grid grid-cols-3 gap-3 w-full mb-6">
+            {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((num) => (
+              <button
+                key={num}
+                onClick={() => handlePinPress(num)}
+                className="h-16 rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-90 border border-slate-800/80 text-xl font-black text-white transition cursor-pointer shadow-xs"
+              >
+                {num}
+              </button>
+            ))}
+            
+            <Link
+              href="/"
+              className="h-16 rounded-2xl bg-slate-950 border border-slate-800 hover:bg-slate-900 text-xs font-bold text-slate-400 flex items-center justify-center transition cursor-pointer active:scale-95"
+            >
+              Zpět
+            </Link>
+
+            <button
+              onClick={() => handlePinPress("0")}
+              className="h-16 rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-90 border border-slate-800/80 text-xl font-black text-white transition cursor-pointer shadow-xs"
+            >
+              0
+            </button>
+
+            <button
+              onClick={handleBackspace}
+              className="h-16 rounded-2xl bg-slate-950 border border-slate-800 hover:bg-slate-900 active:scale-90 text-sm font-bold text-slate-400 flex items-center justify-center transition cursor-pointer"
+            >
+              ⌫
+            </button>
+          </div>
+
+          {pinError && (
+            <p className="text-xs font-bold text-red-400 animate-pulse">
+              Nesprávný PIN kód
+            </p>
+          )}
+        </div>
+      </main>
+    );
   }
 
-  const topItems = Object.entries(itemsMap).sort(
-    (a, b) => b[1].qty - a[1].qty
-  );
-
-  const formattedDate = targetDate.toLocaleDateString("cs-CZ", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-
-  const isoDate = targetDate.toISOString().split("T")[0];
-
+  // -------------------------------------------------------------
+  // ODEMČENÁ STRÁNKA DENNÍHO SOUHRNU
+  // -------------------------------------------------------------
   return (
-    <main className="min-h-screen bg-slate-200 p-3 sm:p-6 select-none print:bg-white print:p-0">
-      <div className="mx-auto max-w-6xl space-y-4">
-        {/* Horní navigace */}
-        <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-          <Link
-            href="/"
-            className="inline-flex rounded-xl bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-xs transition hover:bg-slate-50 cursor-pointer"
-          >
-            ← Zpět na přehled
-          </Link>
-
-          {/* Výběr data */}
-          <form method="GET" className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl shadow-xs">
-            <span className="text-xs font-bold text-slate-500">Datum:</span>
-            <input
-              type="date"
-              name="date"
-              defaultValue={isoDate}
-              className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-slate-900"
-            />
-            <button
-              type="submit"
-              className="rounded-lg bg-slate-900 px-3 py-1 text-xs font-bold text-white hover:bg-slate-800 cursor-pointer"
+    <main className="min-h-screen bg-slate-100 p-4 sm:p-6 select-none">
+      <div className="mx-auto max-w-5xl space-y-5">
+        
+        {/* Horní hlavička */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="rounded-xl bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 transition"
             >
-              Zobrazit
-            </button>
-          </form>
-        </div>
-
-        {/* Hlavička uzávěrky */}
-        <div className="rounded-3xl bg-white p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight">
-              Denní uzávěrka plateb
+              ← Zpět
+            </Link>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              📊 Denní souhrn tržeb
             </h1>
-            <p className="mt-1 text-sm font-semibold capitalize text-slate-500">
-              {formattedDate}
-            </p>
           </div>
+
+          <button
+            onClick={handleLock}
+            className="rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-700 shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1.5"
+          >
+            🔒 Zamknout přehled
+          </button>
         </div>
 
-        {/* Hlavní karty – Celkem, Hotovost, Karta */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-3xl bg-slate-900 text-white p-5 shadow-xs">
-            <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              Celková tržba
-            </div>
-            <div className="mt-2 text-3xl font-black">
-              {totalAmount.toLocaleString("cs-CZ")} Kč
-            </div>
-            <div className="mt-1 text-xs text-slate-400">
-              {paymentCount} {paymentCount === 1 ? "platba" : paymentCount < 5 ? "platby" : "plateb"}
-            </div>
+        {loading ? (
+          <div className="h-64 flex items-center justify-center text-slate-400 font-bold">
+            Načítám finanční uzávěrku...
           </div>
-
-          <div className="rounded-3xl bg-emerald-50 border border-emerald-200 p-5 shadow-xs">
-            <div className="text-xs font-bold uppercase tracking-wider text-emerald-800">
-              💵 Hotovost (V kase)
-            </div>
-            <div className="mt-2 text-3xl font-black text-emerald-950">
-              {cashAmount.toLocaleString("cs-CZ")} Kč
-            </div>
-            <div className="mt-1 text-xs text-emerald-700">
-              Fyzický stav pokladny
-            </div>
+        ) : !data ? (
+          <div className="rounded-3xl bg-white p-12 text-center text-slate-400 border border-slate-200">
+            Nepodařilo se načíst data dnešní směny.
           </div>
+        ) : (
+          <>
+            {/* Souhrnné karty tržby */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <span className="text-xs font-bold text-slate-400 block uppercase">Tržba celkem</span>
+                <span className="text-2xl font-black text-slate-900 mt-1 block">
+                  {data.totalRevenue} Kč
+                </span>
+              </div>
 
-          <div className="rounded-3xl bg-blue-50 border border-blue-200 p-5 shadow-xs">
-            <div className="text-xs font-bold uppercase tracking-wider text-blue-800">
-              💳 Platební terminál
-            </div>
-            <div className="mt-2 text-3xl font-black text-blue-950">
-              {cardAmount.toLocaleString("cs-CZ")} Kč
-            </div>
-            <div className="mt-1 text-xs text-blue-700">
-              Musí sedět s denní dávkou
-            </div>
-          </div>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <span className="text-xs font-bold text-slate-400 block uppercase">💵 Hotovost</span>
+                <span className="text-2xl font-black text-emerald-600 mt-1 block">
+                  {data.cashRevenue} Kč
+                </span>
+              </div>
 
-          <div className="rounded-3xl bg-white border border-slate-200 p-5 shadow-xs">
-            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Průměrný účet
-            </div>
-            <div className="mt-2 text-3xl font-black text-slate-800">
-              {paymentCount > 0
-                ? Math.round(totalAmount / paymentCount).toLocaleString("cs-CZ")
-                : 0}{" "}
-              Kč
-            </div>
-            <div className="mt-1 text-xs text-slate-500">
-              Na jednu útratu
-            </div>
-          </div>
-        </div>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <span className="text-xs font-bold text-slate-400 block uppercase">💳 Kartou</span>
+                <span className="text-2xl font-black text-blue-600 mt-1 block">
+                  {data.cardRevenue} Kč
+                </span>
+              </div>
 
-        {/* Spodní detail: TOP položky + Tržba podle stolů + Poslední platby */}
-        <div className="grid gap-4 lg:grid-cols-3">
-          {/* 1. Prodané položky */}
-          <div className="rounded-3xl bg-white p-5 shadow-xs flex flex-col">
-            <h2 className="text-base font-black text-slate-900 mb-3">
-              🍺 Prodané položky
-            </h2>
-            <div className="flex-1 overflow-y-auto max-h-80 space-y-2 pr-1">
-              {topItems.length === 0 ? (
-                <p className="text-xs text-slate-400">Žádný prodej položek.</p>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <span className="text-xs font-bold text-slate-400 block uppercase">Uzavřených účtů</span>
+                <span className="text-2xl font-black text-slate-700 mt-1 block">
+                  {data.orderCount}×
+                </span>
+              </div>
+            </div>
+
+            {/* Top prodávané položky dneška */}
+            <div className="rounded-3xl bg-white border border-slate-200 shadow-xs overflow-hidden">
+              <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                <h2 className="text-base font-black text-slate-900">
+                  🏆 Nejprodávanější položky dneška
+                </h2>
+                <span className="text-xs font-bold text-slate-400">
+                  {data.topProducts.length} položek
+                </span>
+              </div>
+
+              {data.topProducts.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-sm font-medium">
+                  Zatím dnes nebyly prodány žádné položky.
+                </div>
               ) : (
-                topItems.map(([name, data]) => (
-                  <div
-                    key={name}
-                    className="flex items-center justify-between text-xs py-1.5 border-b border-slate-100 last:border-0"
-                  >
-                    <div>
-                      <span className="font-bold text-slate-800">{name}</span>
-                      <span className="text-slate-500 ml-1.5">({data.qty} ks)</span>
-                    </div>
-                    <span className="font-black text-slate-900">
-                      {data.total.toLocaleString("cs-CZ")} Kč
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* 2. Tržba podle stolů */}
-          <div className="rounded-3xl bg-white p-5 shadow-xs flex flex-col">
-            <h2 className="text-base font-black text-slate-900 mb-3">
-              🪑 Tržba podle stolů
-            </h2>
-            <div className="flex-1 overflow-y-auto max-h-80 space-y-2 pr-1">
-              {byTable.length === 0 ? (
-                <p className="text-xs text-slate-400">Zatím žádné stoly.</p>
-              ) : (
-                byTable.map(([tableName, data]) => (
-                  <div
-                    key={tableName}
-                    className="flex items-center justify-between text-xs py-1.5 border-b border-slate-100 last:border-0"
-                  >
-                    <div>
-                      <span className="font-bold text-slate-800">{tableName}</span>
-                      <span className="text-slate-400 ml-1.5">({data.count}× účet)</span>
-                    </div>
-                    <span className="font-black text-slate-900">
-                      {data.amount.toLocaleString("cs-CZ")} Kč
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* 3. Poslední platby dne */}
-          <div className="rounded-3xl bg-white p-5 shadow-xs flex flex-col">
-            <h2 className="text-base font-black text-slate-900 mb-3">
-              🕒 Poslední platby
-            </h2>
-            <div className="flex-1 overflow-y-auto max-h-80 space-y-2 pr-1">
-              {payments.length === 0 ? (
-                <p className="text-xs text-slate-400">Žádné platby za tento den.</p>
-              ) : (
-                payments.slice(0, 15).map((payment: any) => {
-                  const time = new Date(payment.createdAt).toLocaleTimeString("cs-CZ", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  });
-                  const isCard =
-                    payment.paymentMethod &&
-                    payment.paymentMethod.toUpperCase() === "CARD";
-
-                  return (
+                <div className="divide-y divide-slate-100">
+                  {data.topProducts.map((prod, idx) => (
                     <div
-                      key={payment.id}
-                      className="flex items-center justify-between text-xs py-1.5 border-b border-slate-100 last:border-0"
+                      key={prod.name}
+                      className="px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition"
                     >
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-slate-400 font-mono text-[11px]">{time}</span>
-                        <span className="font-bold text-slate-800">
-                          {payment.order?.table?.name ?? "Stůl"}
+                      <div className="flex items-center gap-3">
+                        <span className="w-6 text-center text-xs font-black text-slate-400">
+                          #{idx + 1}
                         </span>
-                        <span
-                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                            isCard
-                              ? "bg-blue-100 text-blue-800"
-                              : "bg-emerald-100 text-emerald-800"
-                          }`}
-                        >
-                          {isCard ? "Karta" : "Hotově"}
+                        <span className="font-bold text-slate-900 text-sm">
+                          {prod.name}
                         </span>
                       </div>
-                      <span className="font-black text-emerald-700">
-                        +{(payment.amount ?? 0).toLocaleString("cs-CZ")} Kč
-                      </span>
+
+                      <div className="flex items-center gap-4 text-right">
+                        <span className="text-xs font-bold bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg">
+                          {prod.quantity} ks
+                        </span>
+                        <span className="font-black text-slate-900 text-sm w-20">
+                          {prod.revenue} Kč
+                        </span>
+                      </div>
                     </div>
-                  );
-                })
+                  ))}
+                </div>
               )}
             </div>
-          </div>
-        </div>
+          </>
+        )}
+
       </div>
     </main>
   );
