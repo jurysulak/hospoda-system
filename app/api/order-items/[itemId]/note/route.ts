@@ -13,7 +13,7 @@ export async function PATCH(
     const updatedItem = await prisma.orderItem.update({
       where: { id: Number(itemId) },
       data: {
-        note: note ? note.trim() : null,
+        note: note && note.trim().length > 0 ? note.trim() : null,
       },
     });
 
@@ -25,4 +25,4 @@ export async function PATCH(
       { status: 500 }
     );
   }
-}   
+}
