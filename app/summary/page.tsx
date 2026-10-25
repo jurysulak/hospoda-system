@@ -8,16 +8,19 @@ import Link from "next/link";
 // -------------------------------------------------------------
 const MASTER_PIN = "1234";
 
+type TopProduct = {
+  name: string;
+  quantity: number;
+  revenue: number;
+};
+
 type SummaryData = {
   totalRevenue: number;
   cashRevenue: number;
   cardRevenue: number;
   orderCount: number;
-  topProducts: {
-    name: string;
-    quantity: number;
-    revenue: number;
-  }[];
+  byTable: { tableName: string; amount: number }[];
+  topProducts: TopProduct[];
 };
 
 export default function SummaryPage() {
@@ -43,10 +46,51 @@ export default function SummaryPage() {
     async function fetchSummary() {
       try {
         setLoading(true);
-        const res = await fetch("/api/summary", { cache: "no-store" });
+        // Voláme existující endpoint pro denní souhrn plateb:
+        const res = await fetch("/api/payments/summary", { cache: "no-store" });
         if (res.ok) {
           const json = await res.json();
-          setData(json);
+
+          // Spočítáme hotovost a karty, pokud je endpoint neposkytuje přímo
+          const payments = json.payments || [];
+          const cardSum =
+            json.cardTotal ??
+            payments
+              .filter((p: any) => p.paymentMethod === "CARD")
+              .reduce((sum: number, p: any) => sum + p.amount, 0);
+
+          const cashSum =
+            json.cashTotal ??
+            payments
+              .filter((p: any) => p.paymentMethod !== "CARD")
+              .reduce((sum: number, p: any) => sum + p.amount, 0);
+
+          // Agregace nejprodávanějších položek z objednávek
+          const productMap: Record<string, { quantity: number; revenue: number }> = {};
+          for (const p of payments) {
+            const items = p.order?.items || [];
+            for (const item of items) {
+              const name = item.productName || "Neznámá položka";
+              const current = productMap[name] || { quantity: 0, revenue: 0 };
+              productMap[name] = {
+                quantity: current.quantity + item.quantity,
+                revenue: current.revenue + item.quantity * item.unitPrice,
+              };
+            }
+          }
+
+          const topProducts: TopProduct[] = Object.entries(productMap)
+            .map(([name, val]) => ({ name, ...val }))
+            .sort((a, b) => b.quantity - a.quantity);
+
+          setData({
+            totalRevenue: json.totalAmount ?? (cashSum + cardSum),
+            cashRevenue: cashSum,
+            cardRevenue: cardSum,
+            orderCount: json.paymentCount ?? payments.length,
+            byTable: json.byTable || [],
+            topProducts,
+          });
         }
       } catch (err) {
         console.error("Chyba při načítání souhrnu:", err);
@@ -96,7 +140,6 @@ export default function SummaryPage() {
     return (
       <main className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 select-none">
         <div className="w-full max-w-xs flex flex-col items-center animate-in fade-in zoom-in-95 duration-200">
-          
           <div className="w-16 h-16 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center text-2xl shadow-xl mb-4">
             🔒
           </div>
@@ -138,7 +181,7 @@ export default function SummaryPage() {
                 {num}
               </button>
             ))}
-            
+
             <Link
               href="/"
               className="h-16 rounded-2xl bg-slate-950 border border-slate-800 hover:bg-slate-900 text-xs font-bold text-slate-400 flex items-center justify-center transition cursor-pointer active:scale-95"
@@ -176,6 +219,7 @@ export default function SummaryPage() {
     <main className="min-h-screen bg-slate-100 p-4 sm:p-6 select-none">
       <div className="mx-auto max-w-5xl space-y-5">
         
+        {/* Horní hlavička */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Link
@@ -207,6 +251,7 @@ export default function SummaryPage() {
           </div>
         ) : (
           <>
+            {/* 4 hlavní statistické karty */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
                 <span className="text-xs font-bold text-slate-400 block uppercase">Tržba celkem</span>
@@ -230,13 +275,38 @@ export default function SummaryPage() {
               </div>
 
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-                <span className="text-xs font-bold text-slate-400 block uppercase">Uzavřených účtů</span>
+                <span className="text-xs font-bold text-slate-400 block uppercase">Počet plateb</span>
                 <span className="text-2xl font-black text-slate-700 mt-1 block">
                   {data.orderCount}×
                 </span>
               </div>
             </div>
 
+            {/* Tržby podle stolů */}
+            {data.byTable.length > 0 && (
+              <div className="rounded-3xl bg-white border border-slate-200 shadow-xs p-4">
+                <h2 className="text-base font-black text-slate-900 mb-3">
+                  🪑 Tržba podle jednotlivých stolů
+                </h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                  {data.byTable.map((t) => (
+                    <div
+                      key={t.tableName}
+                      className="rounded-2xl border border-slate-100 bg-slate-50 p-3 flex justify-between items-center"
+                    >
+                      <span className="font-bold text-slate-800 text-sm truncate">
+                        {t.tableName}
+                      </span>
+                      <span className="font-extrabold text-slate-900 text-sm">
+                        {t.amount} Kč
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Nejprodávanější položky dneška */}
             <div className="rounded-3xl bg-white border border-slate-200 shadow-xs overflow-hidden">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between">
                 <h2 className="text-base font-black text-slate-900">
