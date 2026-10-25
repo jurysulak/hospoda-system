@@ -29,76 +29,100 @@ export default function KitchenPage() {
   // Ukládáme si předchozí ID bonů pro detekci nové objednávky
   const prevTicketIdsRef = useRef<Set<number>>(new Set());
 
-  // Web Audio gong pro kuchyň (Ding-Dong)
+ // Indikátor prvního načtení stránky a evidence ID čekajících jídel
+  const isInitialLoadRef = useRef(true);
+  const prevPendingItemIdsRef = useRef<Set<number>>(new Set());
+
+  // Výrazný a hlasitý hotelový zvonek do kuchyně (Ding-Dong s dlouhým dozvukem)
   const playKitchenBell = () => {
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContextClass) return;
       const ctx = new AudioContextClass();
 
-      // První tón (vyšší)
+      // Pokud byl kontext prohlížečem pozastaven, obnovíme ho
+      if (ctx.state === "suspended") {
+        ctx.resume();
+      }
+
+      const nowTime = ctx.currentTime;
+
+      // 1. TÓN: "DING" (Vysoký čistý tón - 987 Hz / H5)
       const osc1 = ctx.createOscillator();
       const gain1 = ctx.createGain();
       osc1.type = "sine";
-      osc1.frequency.setValueAtTime(880, ctx.currentTime); // tón A5
-      gain1.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc1.frequency.setValueAtTime(987.77, nowTime);
+
+      // Hlasitý náběh a pozvolný dozvuk (0.75 s)
+      gain1.gain.setValueAtTime(0.85, nowTime);
+      gain1.gain.exponentialRampToValueAtTime(0.0001, nowTime + 0.75);
+
       osc1.connect(gain1);
       gain1.connect(ctx.destination);
-      osc1.start(ctx.currentTime);
-      osc1.stop(ctx.currentTime + 0.4);
+      osc1.start(nowTime);
+      osc1.stop(nowTime + 0.75);
 
-      // Druhý tón (nižší)
+      // 2. TÓN: "DONG" (Hlubší rezonující zvon - 659 Hz / E5)
       const osc2 = ctx.createOscillator();
       const gain2 = ctx.createGain();
       osc2.type = "sine";
-      osc2.frequency.setValueAtTime(587.33, ctx.currentTime + 0.25); // tón D5
-      gain2.gain.setValueAtTime(0.3, ctx.currentTime + 0.25);
-      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.7);
+      osc2.frequency.setValueAtTime(659.25, nowTime + 0.28);
+
+      // Dlouhý dozvuk přes 1.5 sekundy
+      gain2.gain.setValueAtTime(0.85, nowTime + 0.28);
+      gain2.gain.exponentialRampToValueAtTime(0.0001, nowTime + 1.8);
+
       osc2.connect(gain2);
       gain2.connect(ctx.destination);
-      osc2.start(ctx.currentTime + 0.25);
-      osc2.stop(ctx.currentTime + 0.7);
+      osc2.start(nowTime + 0.28);
+      osc2.stop(nowTime + 1.8);
     } catch (e) {
       console.warn("Přehrání zvuku selhalo:", e);
     }
   };
 
-  // Načtení dat ze serveru
+  // Načtení objednávek + okamžité zazvonění při novém jídle
   const fetchTickets = async () => {
     try {
       const res = await fetch("/api/kitchen", { cache: "no-store" });
       if (res.ok) {
         const data: KitchenTicket[] = await res.json();
-        
-        // Zjistíme, zda přibyl nový bon, který ještě v kuchyni nebyl
-        const currentIds = new Set(data.map((t) => t.orderId));
-        if (prevTicketIdsRef.current.size > 0) {
-          const hasNewTicket = data.some((t) => !prevTicketIdsRef.current.has(t.orderId));
-          if (hasNewTicket) {
+
+        // Posbíráme ID všech jídel, která ještě čekají na uvaření
+        const currentPendingIds = new Set<number>();
+        data.forEach((ticket) => {
+          ticket.items.forEach((item) => {
+            if (item.status !== "DONE") {
+              currentPendingIds.add(item.id);
+            }
+          });
+        });
+
+        // Při prvním otevření stránky jen uložíme stávající stav
+        if (isInitialLoadRef.current) {
+          isInitialLoadRef.current = false;
+          prevPendingItemIdsRef.current = currentPendingIds;
+        } else {
+          // Zazvoní, jakmile přibyde jakékoliv nové nevydané jídlo (i úplně první!)
+          const hasNewPendingItem = Array.from(currentPendingIds).some(
+            (id) => !prevPendingItemIdsRef.current.has(id)
+          );
+
+          if (hasNewPendingItem) {
             playKitchenBell();
           }
+
+          prevPendingItemIdsRef.current = currentPendingIds;
         }
-        prevTicketIdsRef.current = currentIds;
+
         setTickets(data);
       }
     } catch (err) {
-      console.error("Chyba načítání bonů:", err);
+      console.error("Chyba načítání bonů v kuchyni:", err);
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    fetchTickets();
-    const syncInterval = setInterval(fetchTickets, 3000);
-    const clockInterval = setInterval(() => setNow(new Date()), 30000);
-
-    return () => {
-      clearInterval(syncInterval);
-      clearInterval(clockInterval);
-    };
-  }, []);
 
   const toggleItemStatus = async (itemId: number, currentStatus: string) => {
     const nextStatus = currentStatus === "DONE" ? "PENDING" : "DONE";
