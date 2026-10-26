@@ -26,69 +26,59 @@ export default function KitchenPage() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(false);
 
-  // Ukládáme si předchozí ID bonů pro detekci nové objednávky
-  const prevTicketIdsRef = useRef<Set<number>>(new Set());
-
- // Indikátor prvního načtení stránky a evidence ID čekajících jídel
   const isInitialLoadRef = useRef(true);
   const prevPendingItemIdsRef = useRef<Set<number>>(new Set());
 
-  // Výrazný a hlasitý hotelový zvonek do kuchyně (Ding-Dong s dlouhým dozvukem)
+  // Hlasitý hotelový gong (Ding-Dong)
   const playKitchenBell = () => {
     try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextClass) return;
-      const ctx = new AudioContextClass();
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
 
-      // Pokud byl kontext prohlížečem pozastaven, obnovíme ho
       if (ctx.state === "suspended") {
         ctx.resume();
       }
 
-      const nowTime = ctx.currentTime;
+      const t = ctx.currentTime;
 
-      // 1. TÓN: "DING" (Vysoký čistý tón - 987 Hz / H5)
+      // 1. DING (vysoký tón)
       const osc1 = ctx.createOscillator();
       const gain1 = ctx.createGain();
       osc1.type = "sine";
-      osc1.frequency.setValueAtTime(987.77, nowTime);
-
-      // Hlasitý náběh a pozvolný dozvuk (0.75 s)
-      gain1.gain.setValueAtTime(0.85, nowTime);
-      gain1.gain.exponentialRampToValueAtTime(0.0001, nowTime + 0.75);
-
+      osc1.frequency.setValueAtTime(987.77, t);
+      gain1.gain.setValueAtTime(0.85, t);
+      gain1.gain.exponentialRampToValueAtTime(0.0001, t + 0.75);
       osc1.connect(gain1);
       gain1.connect(ctx.destination);
-      osc1.start(nowTime);
-      osc1.stop(nowTime + 0.75);
+      osc1.start(t);
+      osc1.stop(t + 0.75);
 
-      // 2. TÓN: "DONG" (Hlubší rezonující zvon - 659 Hz / E5)
+      // 2. DONG (hlubší tón s dlouhým dozvukem)
       const osc2 = ctx.createOscillator();
       const gain2 = ctx.createGain();
       osc2.type = "sine";
-      osc2.frequency.setValueAtTime(659.25, nowTime + 0.28);
-
-      // Dlouhý dozvuk přes 1.5 sekundy
-      gain2.gain.setValueAtTime(0.85, nowTime + 0.28);
-      gain2.gain.exponentialRampToValueAtTime(0.0001, nowTime + 1.8);
-
+      osc2.frequency.setValueAtTime(659.25, t + 0.28);
+      gain2.gain.setValueAtTime(0.85, t + 0.28);
+      gain2.gain.exponentialRampToValueAtTime(0.0001, t + 1.8);
       osc2.connect(gain2);
       gain2.connect(ctx.destination);
-      osc2.start(nowTime + 0.28);
-      osc2.stop(nowTime + 1.8);
+      osc2.start(t + 0.28);
+      osc2.stop(t + 1.8);
     } catch (e) {
-      console.warn("Přehrání zvuku selhalo:", e);
+      console.warn("Audio error:", e);
     }
   };
 
-  // Načtení objednávek + okamžité zazvonění při novém jídle
   const fetchTickets = async () => {
     try {
-      const res = await fetch("/api/kitchen", { cache: "no-store" });
+      const res = await fetch("/api/kitchen", {
+        cache: "no-store",
+        headers: { "Pragma": "no-cache", "Cache-Control": "no-cache" },
+      });
       if (res.ok) {
         const data: KitchenTicket[] = await res.json();
 
-        // Posbíráme ID všech jídel, která ještě čekají na uvaření
         const currentPendingIds = new Set<number>();
         data.forEach((ticket) => {
           ticket.items.forEach((item) => {
@@ -98,31 +88,38 @@ export default function KitchenPage() {
           });
         });
 
-        // Při prvním otevření stránky jen uložíme stávající stav
         if (isInitialLoadRef.current) {
           isInitialLoadRef.current = false;
           prevPendingItemIdsRef.current = currentPendingIds;
         } else {
-          // Zazvoní, jakmile přibyde jakékoliv nové nevydané jídlo (i úplně první!)
-          const hasNewPendingItem = Array.from(currentPendingIds).some(
+          const hasNew = Array.from(currentPendingIds).some(
             (id) => !prevPendingItemIdsRef.current.has(id)
           );
-
-          if (hasNewPendingItem) {
+          if (hasNew) {
             playKitchenBell();
           }
-
           prevPendingItemIdsRef.current = currentPendingIds;
         }
 
         setTickets(data);
       }
     } catch (err) {
-      console.error("Chyba načítání bonů v kuchyni:", err);
+      console.error("Chyba načítání dat v kuchyni:", err);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchTickets();
+    const interval = setInterval(fetchTickets, 3000);
+    const clock = setInterval(() => setNow(new Date()), 30000);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(clock);
+    };
+  }, []);
 
   const toggleItemStatus = async (itemId: number, currentStatus: string) => {
     const nextStatus = currentStatus === "DONE" ? "PENDING" : "DONE";
@@ -260,7 +257,6 @@ export default function KitchenPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Tlačítko pro otestování / povolení zvuku */}
           <button
             onClick={() => {
               playKitchenBell();
@@ -271,7 +267,6 @@ export default function KitchenPage() {
                 ? "bg-emerald-950 border border-emerald-700 text-emerald-300"
                 : "bg-slate-800 hover:bg-slate-700 text-slate-300"
             }`}
-            title="Klikni pro vyzkoušení zvuku a povolení automatického přehrávání v prohlížeči"
           >
             🔔 Zvuk {audioEnabled ? "aktivní" : "zapnout"}
           </button>
