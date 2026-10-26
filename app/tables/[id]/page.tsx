@@ -54,6 +54,9 @@ export default function TableDetail({
   const [selectedCategory, setSelectedCategory] = useState<string>("Vše");
   const [search, setSearch] = useState("");
 
+  // Mobilní přepínač záložek: "order" (nabídka produktů) vs "bill" (účet a placení)
+  const [mobileTab, setMobileTab] = useState<"order" | "bill">("order");
+
   // Stavy pro platbu
   const [isPaying, setIsPaying] = useState(false);
   const [showPayModal, setShowPayModal] = useState(false);
@@ -73,6 +76,7 @@ export default function TableDetail({
   // Stavy pro tisk bonu a účtenky
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printMode, setPrintMode] = useState<"RECEIPT" | "KITCHEN">("RECEIPT");
+  const [lastPaymentMethod, setLastPaymentMethod] = useState<"CASH" | "CARD">("CASH");
 
   // Stavy pro poznámku k položce
   const [editingItemNote, setEditingItemNote] = useState<OrderItem | null>(null);
@@ -202,6 +206,7 @@ export default function TableDetail({
   async function handlePay(method: "CASH" | "CARD") {
     try {
       setIsPaying(true);
+      setLastPaymentMethod(method);
       const selectedItemsList = Object.entries(selectedQuantities).map(([itemId, quantity]) => ({
         itemId: Number(itemId),
         quantity,
@@ -304,6 +309,8 @@ export default function TableDetail({
     0
   );
 
+  const totalItemsCount = items.reduce((sum, item) => sum + item.quantity, 0);
+
   const selectedTotal = items.reduce((sum, item) => {
     const selectedQty = selectedQuantities[item.id] || 0;
     return sum + selectedQty * item.unitPrice;
@@ -323,157 +330,150 @@ export default function TableDetail({
 
   return (
     <main className="h-screen max-h-screen bg-slate-100 flex flex-col overflow-hidden select-none">
-      {/* Horní lišta stolu */}
-      <header className="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between shrink-0 shadow-xs">
-        <div className="flex items-center gap-3">
+      {/* 1. Horní kompaktní lišta stolu */}
+      <header className="bg-white border-b border-slate-200 px-3 py-2 flex items-center justify-between shrink-0 shadow-xs">
+        <div className="flex items-center gap-2 min-w-0">
           <Link
             href={backUrl}
-            className="flex items-center gap-1 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl transition cursor-pointer"
+            className="flex items-center text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1.5 rounded-xl transition cursor-pointer shrink-0"
           >
-            ← Zpět na stoly
+            ← Zpět
           </Link>
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-black text-slate-900 tracking-tight">
-              {table?.name || `Stůl ${tableId}`}
-            </span>
-            <span
-              className={`inline-block text-xs font-bold px-2 py-0.5 rounded-full ${
-                items.length > 0
-                  ? "bg-red-100 text-red-800"
-                  : isReserved
-                  ? "bg-amber-100 text-amber-900"
-                  : "bg-emerald-100 text-emerald-800"
-              }`}
-            >
-              {items.length > 0 ? "Obsazený" : isReserved ? "Rezervace" : "Volný"}
-            </span>
-
-            {/* Tlačítko pro správu rezervace */}
-            <button
-              onClick={openReservationModal}
-              className="rounded-xl border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800 hover:bg-amber-100 transition cursor-pointer"
-            >
-              {isReserved ? "🟡 Upravit rezervaci" : "📅 Rezervovat"}
-            </button>
-          </div>
+          <span className="text-lg font-black text-slate-900 tracking-tight truncate">
+            {table?.name || `Stůl ${tableId}`}
+          </span>
+          <span
+            className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+              items.length > 0
+                ? "bg-red-100 text-red-800"
+                : isReserved
+                ? "bg-amber-100 text-amber-900"
+                : "bg-emerald-100 text-emerald-800"
+            }`}
+          >
+            {items.length > 0 ? "Obsazeno" : isReserved ? "Rezervace" : "Volno"}
+          </span>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <span className="text-xs text-slate-400 block font-medium uppercase tracking-wider leading-none">Celkem</span>
-            <span className="text-xl font-extrabold text-slate-900 leading-tight">
-              {total} Kč
-            </span>
-          </div>
-
-          {/* Tlačítka tisku */}
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => {
-                setPrintMode("KITCHEN");
-                setShowPrintModal(true);
-              }}
-              disabled={items.length === 0}
-              className="rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40 transition cursor-pointer"
-              title="Tisk bonu do kuchyně / na bar"
-            >
-              👨‍🍳 Bon
-            </button>
-
-            <button
-              onClick={() => {
-                setPrintMode("RECEIPT");
-                setShowPrintModal(true);
-              }}
-              disabled={items.length === 0}
-              className="rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40 transition cursor-pointer"
-              title="Tisk účtenky pro hosta"
-            >
-              🧾 Účtenka
-            </button>
-          </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={openReservationModal}
+            className="rounded-xl border border-slate-300 bg-white px-2 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+            title="Rezervace"
+          >
+            📅
+          </button>
 
           <button
-            onClick={() => setShowPayModal(true)}
+            onClick={() => {
+              setPrintMode("KITCHEN");
+              setShowPrintModal(true);
+            }}
             disabled={items.length === 0}
-            className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-40 text-white font-bold px-4 py-2 rounded-xl text-sm shadow transition cursor-pointer"
+            className="rounded-xl border border-slate-300 bg-white px-2 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-30 transition cursor-pointer"
+            title="Tisk bonu do kuchyně"
           >
-            Zaplatit
+            🍳 Bon
+          </button>
+
+          <button
+            onClick={() => {
+              setPrintMode("RECEIPT");
+              setShowPrintModal(true);
+            }}
+            disabled={items.length === 0}
+            className="rounded-xl border border-slate-300 bg-white px-2 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-30 transition cursor-pointer"
+            title="Tisk účtenky"
+          >
+            🧾 Tisk
+          </button>
+
+          <button
+            onClick={() => setShowTransferModal(true)}
+            disabled={items.length === 0}
+            className="rounded-xl border border-slate-300 bg-white px-2 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-30 transition cursor-pointer"
+            title="Přesunout stůl"
+          >
+            ⇄ Přesun
           </button>
         </div>
       </header>
 
-      {/* Tělo: 2 sloupce (Účet vs Nabídka) */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-[380px_1fr] lg:grid-cols-[430px_1fr] overflow-hidden">
-        
-        {/* LEVÝ PANEL: Účet stolu */}
-        <section className="bg-white border-r border-slate-200 flex flex-col h-full overflow-hidden">
-          {/* Akční lišta účtu */}
-          <div className="p-3 border-b border-slate-100 flex items-center justify-between gap-1.5 shrink-0 bg-slate-50/50">
-            <span className="font-bold text-slate-800 text-sm">
-              Účet ({items.reduce((s, i) => s + i.quantity, 0)} ks)
-            </span>
-            <div className="flex gap-1.5">
-              <button
-                onClick={() => {
-                  setSelectedTargetTableId(null);
-                  setShowTransferModal(true);
-                }}
-                disabled={items.length === 0}
-                className="text-xs font-semibold px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 transition cursor-pointer"
-              >
-                Přesunout
-              </button>
+      {/* 2. Mobilní přepínač záložek (jen na telefonech) */}
+      <div className="md:hidden flex bg-white border-b border-slate-200 p-1.5 gap-1.5 shrink-0">
+        <button
+          onClick={() => setMobileTab("order")}
+          className={`flex-1 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${
+            mobileTab === "order"
+              ? "bg-slate-900 text-white shadow-xs"
+              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+        >
+          🍔 Nabídka ({products.length})
+        </button>
 
-              <button
-                onClick={() => {
-                  setIsPayMode(!isPayMode);
-                  setSelectedQuantities({});
-                }}
-                disabled={items.length === 0}
-                className={`text-xs font-semibold px-2 py-1.5 rounded-lg border transition cursor-pointer ${
-                  isPayMode
-                    ? "bg-amber-100 border-amber-300 text-amber-900"
-                    : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
-                } disabled:opacity-40`}
-              >
-                {isPayMode ? "Zrušit" : "Dělit"}
-              </button>
+        <button
+          onClick={() => setMobileTab("bill")}
+          className={`flex-1 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${
+            mobileTab === "bill"
+              ? "bg-amber-500 text-slate-950 shadow-xs"
+              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+        >
+          🧾 Účet ({totalItemsCount} ks • {total} Kč)
+        </button>
+      </div>
 
-              <button
-                onClick={clearTable}
-                disabled={items.length === 0}
-                className="text-xs font-semibold px-2 py-1.5 rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-40 transition cursor-pointer"
-              >
-                Vyčistit
-              </button>
+      {/* 3. Hlavní pracovní plocha */}
+      <div className="flex-1 min-h-0 flex overflow-hidden p-2 sm:p-3 gap-3">
+        {/* LEVÝ PANEL: ÚČET STOLU */}
+        <section
+          className={`w-full md:w-96 flex flex-col rounded-3xl bg-white border border-slate-200 shadow-xs overflow-hidden ${
+            mobileTab === "bill" ? "flex" : "hidden md:flex"
+          }`}
+        >
+          <div className="p-3.5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50/50">
+            <div>
+              <h2 className="text-sm font-black text-slate-900 tracking-tight">
+                Otevřený účet
+              </h2>
+              <span className="text-xs text-slate-500">
+                {items.length === 0 ? "Prázdný stůl" : `${totalItemsCount} položek celkem`}
+              </span>
             </div>
-          </div>
 
-          {/* Seznam položek */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {isReserved && items.length === 0 && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-center">
-                <span className="text-2xl">📅</span>
-                <p className="mt-1 font-bold text-amber-900 text-sm">
-                  Stůl je rezervován na {table?.reservedTime || "dnes"}
-                </p>
-                {table?.reservedName && (
-                  <p className="text-xs text-amber-800 font-semibold mt-0.5">
-                    Host: {table.reservedName} {table.reservedPax ? `(${table.reservedPax} osob)` : ""}
-                  </p>
-                )}
-                <p className="text-[11px] text-amber-700 mt-2">
-                  Přidáním první položky z katalogu se stůl automaticky změní na aktivní.
-                </p>
+            {items.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setIsPayMode(!isPayMode)}
+                  className={`text-xs font-bold px-2.5 py-1 rounded-xl transition cursor-pointer ${
+                    isPayMode
+                      ? "bg-amber-500 text-black shadow"
+                      : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                  }`}
+                >
+                  {isPayMode ? "✓ Hotovo" : "Rozdělit"}
+                </button>
+                <button
+                  onClick={clearTable}
+                  className="text-xs font-bold p-1 rounded-xl text-red-500 hover:bg-red-50 transition cursor-pointer"
+                  title="Vyčistit stůl"
+                >
+                  🗑️
+                </button>
               </div>
             )}
+          </div>
 
-            {items.length === 0 && !isReserved ? (
-              <div className="h-full flex flex-col items-center justify-center text-center text-slate-400 p-6">
+          {/* Seznam položek účtu */}
+          <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+            {items.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
                 <span className="text-4xl mb-2">🍽️</span>
-                <p className="font-medium text-sm">Stůl je prázdný.</p>
-                <p className="text-xs text-slate-400 mt-1">Vyber položky z nabídky vpravo.</p>
+                <p className="font-bold text-sm">Na účtu nic není</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  Přidej položky kliknutím v nabídce
+                </p>
               </div>
             ) : (
               items.map((item) => {
@@ -482,77 +482,78 @@ export default function TableDetail({
                 return (
                   <div
                     key={item.id}
-                    className={`rounded-xl border p-2.5 transition ${
+                    className={`p-2.5 rounded-2xl border transition flex flex-col gap-1.5 ${
                       isPayMode && selectedQty > 0
-                        ? "border-amber-400 bg-amber-50/60"
-                        : "border-slate-200 bg-white shadow-2xs"
+                        ? "border-amber-400 bg-amber-50/70"
+                        : "border-slate-100 bg-slate-50"
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-slate-900 truncate text-sm">
-                            {item.productName}
-                          </span>
-                          <button
-                            onClick={() => {
-                              setEditingItemNote(item);
-                              setItemNoteText(item.note || "");
-                            }}
-                            className="text-xs text-slate-400 hover:text-slate-700 transition cursor-pointer"
-                            title="Přidat nebo upravit poznámku"
-                          >
-                            ✏️
-                          </button>
-                        </div>
-                        {item.note && (
-                          <div className="text-[11px] font-bold text-amber-700 italic">
-                            ↳ {item.note}
-                          </div>
-                        )}
-                        <div className="text-xs text-slate-500 font-medium">
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0 flex-1 pr-2">
+                        <span className="font-bold text-sm text-slate-900 block truncate">
+                          {item.productName}
+                        </span>
+                        <span className="text-xs text-slate-500 font-semibold">
                           {item.unitPrice} Kč / ks
-                        </div>
+                        </span>
                       </div>
 
-                      {!isPayMode ? (
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            onClick={() => removeOneItem(item.id)}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 active:scale-90 text-slate-800 font-bold text-base transition cursor-pointer"
-                          >
-                            −
-                          </button>
+                      <span className="font-black text-sm text-slate-900">
+                        {item.unitPrice * item.quantity} Kč
+                      </span>
+                    </div>
 
-                          <span className="w-7 text-center font-black text-slate-900 text-sm">
-                            {item.quantity}×
-                          </span>
+                    {item.note && (
+                      <span className="text-xs font-bold text-amber-600 bg-amber-100/60 px-2 py-0.5 rounded-md inline-block self-start">
+                        ↳ {item.note}
+                      </span>
+                    )}
 
-                          <button
-                            onClick={() => addOneItem(item.id)}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-900 hover:bg-slate-800 active:scale-90 text-white font-bold text-base transition cursor-pointer"
-                          >
-                            +
-                          </button>
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-200/60">
+                      <button
+                        onClick={() => {
+                          setEditingItemNote(item);
+                          setItemNoteText(item.note || "");
+                        }}
+                        className="text-[11px] font-bold text-slate-500 hover:text-slate-800 transition cursor-pointer"
+                      >
+                        ✏️ {item.note ? "Upravit poznámku" : "+ Poznámka"}
+                      </button>
 
-                          <div className="w-16 text-right font-bold text-slate-900 text-sm">
-                            {item.quantity * item.unitPrice} Kč
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5 shrink-0">
+                      {isPayMode ? (
+                        <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => decreasePayQuantity(item.id)}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-base cursor-pointer"
+                            disabled={selectedQty <= 0}
+                            className="w-8 h-8 rounded-xl bg-white border border-slate-300 font-black text-sm disabled:opacity-30 active:scale-95 cursor-pointer"
                           >
                             −
                           </button>
-                          <span className="w-10 text-center font-bold text-amber-900 bg-amber-100 rounded-md py-1 text-xs">
-                            {selectedQty} z {item.quantity}
+                          <span className="w-6 text-center font-black text-sm text-amber-900">
+                            {selectedQty}
                           </span>
                           <button
                             onClick={() => increasePayQuantity(item.id, item.quantity)}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-900 text-white font-bold text-base cursor-pointer"
+                            disabled={selectedQty >= item.quantity}
+                            className="w-8 h-8 rounded-xl bg-amber-400 font-black text-sm disabled:opacity-30 active:scale-95 text-slate-950 cursor-pointer"
+                          >
+                            +
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => removeOneItem(item.id)}
+                            className="w-8 h-8 rounded-xl bg-white border border-slate-300 hover:bg-red-50 hover:text-red-600 font-black text-sm active:scale-90 transition cursor-pointer shadow-xs flex items-center justify-center"
+                          >
+                            −
+                          </button>
+                          <span className="font-black text-sm text-slate-900 min-w-5 text-center">
+                            {item.quantity}×
+                          </span>
+                          <button
+                            onClick={() => addOneItem(item.id)}
+                            className="w-8 h-8 rounded-xl bg-slate-900 text-white hover:bg-slate-800 font-black text-sm active:scale-90 transition cursor-pointer shadow-xs flex items-center justify-center"
                           >
                             +
                           </button>
@@ -565,330 +566,294 @@ export default function TableDetail({
             )}
           </div>
 
-          {/* Spodní souhrn účtu */}
-          <div className="p-3 border-t border-slate-200 bg-slate-50 shrink-0">
-            {isPayMode && selectedTotal > 0 ? (
+          {/* Spodní platební blok */}
+          {items.length > 0 && (
+            <div className="p-3 bg-white border-t border-slate-200 shrink-0 space-y-2">
               <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs text-slate-500 block">K úhradě vybráno</span>
-                  <span className="text-lg font-black text-amber-900">{selectedTotal} Kč</span>
-                </div>
+                <span className="text-xs font-bold text-slate-500 uppercase">
+                  {isPayMode && selectedTotal > 0 ? "K úhradě vybráno" : "Celkem k úhradě"}
+                </span>
+                <span className="text-xl font-black text-slate-900">
+                  {amountToPay} Kč
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
                 <button
-                  onClick={() => setShowPayModal(true)}
-                  className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold px-4 py-2.5 rounded-xl text-sm shadow transition cursor-pointer"
+                  onClick={() => handlePay("CASH")}
+                  disabled={isPaying}
+                  className="py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-sm shadow transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
-                  Zaplatit část ({selectedTotal} Kč)
+                  💵 Hotově
+                </button>
+                <button
+                  onClick={() => handlePay("CARD")}
+                  disabled={isPaying}
+                  className="py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-black text-sm shadow transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  💳 Kartou
                 </button>
               </div>
-            ) : (
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs text-slate-400 block font-medium">Celkový účet stolu</span>
-                  <span className="text-2xl font-black text-slate-900">{total} Kč</span>
-                </div>
+            </div>
+          )}
+        </section>
+
+        {/* PRAVÝ PANEL: KATALOG PRODUKTŮ */}
+        <section
+          className={`flex-1 flex flex-col rounded-3xl bg-white border border-slate-200 shadow-xs overflow-hidden ${
+            mobileTab === "order" ? "flex" : "hidden md:flex"
+          }`}
+        >
+          {/* Vyhledávání a kategorie */}
+          <div className="p-3 border-b border-slate-100 bg-slate-50/50 space-y-2.5 shrink-0">
+            <input
+              type="text"
+              placeholder="🔍 Hledat položku..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900 shadow-xs"
+            />
+
+            <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none touch-pan-x">
+              {categories.map((cat) => (
                 <button
-                  onClick={() => setShowPayModal(true)}
-                  disabled={items.length === 0}
-                  className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-40 text-white font-bold px-5 py-2.5 rounded-xl text-sm shadow transition cursor-pointer"
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition cursor-pointer active:scale-95 ${
+                    selectedCategory === cat
+                      ? "bg-slate-900 text-white shadow"
+                      : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
+                  }`}
                 >
-                  Zaplatit stůl
+                  {cat}
                 </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Mřížka položek */}
+          <div className="flex-1 overflow-y-auto p-3">
+            {filteredProducts.length === 0 ? (
+              <div className="h-48 flex items-center justify-center text-slate-400 font-bold text-sm">
+                Žádné položky neodpovídají hledání
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
+                {filteredProducts.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => addProduct(p.id)}
+                    className="p-3 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-amber-50/50 hover:border-amber-400 text-left transition active:scale-95 cursor-pointer shadow-xs flex flex-col justify-between min-h-[84px]"
+                  >
+                    <div>
+                      <span className="font-extrabold text-sm text-slate-900 block leading-tight">
+                        {p.name}
+                      </span>
+                      <span className="text-[11px] font-semibold text-slate-400 mt-0.5 block">
+                        {p.category}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-200/50">
+                      <span className="font-black text-sm text-slate-900">
+                        {p.price} Kč
+                      </span>
+                      <span className="w-6 h-6 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-xs font-black text-slate-700 shadow-xs">
+                        +
+                      </span>
+                    </div>
+                  </button>
+                ))}
               </div>
             )}
           </div>
-        </section>
 
-        {/* PRAVÝ PANEL: Katalog produktů */}
-        <section className="flex flex-col h-full overflow-hidden bg-slate-50">
-          <div className="p-3 bg-white border-b border-slate-200 space-y-2 shrink-0 shadow-2xs">
-            <input
-              type="text"
-              placeholder="🔍 Rychlé hledání položky..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-slate-100 rounded-xl px-3.5 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900"
-            />
-
-            <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-              {categories.map((category) => (
-                <button
-                  key={category}
-                  onClick={() => setSelectedCategory(category)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition cursor-pointer ${
-                    selectedCategory === category
-                      ? "bg-slate-900 text-white shadow-xs"
-                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                  }`}
-                >
-                  {category}
-                </button>
-              ))}
+          {/* Plovoucí spodní lišta na mobilu */}
+          {items.length > 0 && mobileTab === "order" && (
+            <div className="md:hidden p-2.5 bg-slate-900 text-white flex items-center justify-between shrink-0 shadow-lg">
+              <div>
+                <span className="text-xs text-slate-400 block font-bold leading-none">
+                  Stůl: {table?.name}
+                </span>
+                <span className="text-sm font-black text-amber-400 mt-0.5 block">
+                  {totalItemsCount} ks • {total} Kč
+                </span>
+              </div>
+              <button
+                onClick={() => setMobileTab("bill")}
+                className="rounded-xl bg-amber-400 text-slate-950 font-black text-xs px-3.5 py-2 shadow transition active:scale-95 cursor-pointer"
+              >
+                Přejít na účet →
+              </button>
             </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-3">
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
-              {filteredProducts.map((product) => (
-                <button
-                  key={product.id}
-                  onClick={() => addProduct(product.id)}
-                  className="flex flex-col justify-between bg-white border border-slate-200 rounded-2xl p-3 text-left shadow-2xs hover:border-slate-400 active:scale-95 transition cursor-pointer min-h-[84px]"
-                >
-                  <span className="font-bold text-slate-900 text-sm leading-tight line-clamp-2">
-                    {product.name}
-                  </span>
-                  <div className="flex items-center justify-between mt-2 pt-1 border-t border-slate-50">
-                    <span className="text-[11px] font-semibold text-slate-400 truncate max-w-[55%]">
-                      {product.category}
-                    </span>
-                    <span className="font-extrabold text-slate-900 text-sm">
-                      {product.price} Kč
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
+          )}
         </section>
       </div>
 
-      {/* MODAL 1: Výběr platby */}
-      {showPayModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-            <h3 className="text-2xl font-black text-slate-900">Vybrat platbu</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Částka k zaplacení: <span className="font-extrabold text-slate-900 text-base">{amountToPay} Kč</span>
-            </p>
-
-            <div className="mt-5 flex flex-col gap-2.5">
-              <button
-                onClick={() => handlePay("CASH")}
-                disabled={isPaying}
-                className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 py-3.5 text-base font-bold text-white shadow transition cursor-pointer disabled:opacity-50"
-              >
-                💵 Hotově
-              </button>
-              <button
-                onClick={() => handlePay("CARD")}
-                disabled={isPaying}
-                className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-95 py-3.5 text-base font-bold text-white shadow transition cursor-pointer disabled:opacity-50"
-              >
-                💳 Kartou
-              </button>
-              <button
-                onClick={() => setShowPayModal(false)}
-                disabled={isPaying}
-                className="mt-1 rounded-2xl bg-slate-100 hover:bg-slate-200 py-3 text-sm font-semibold text-slate-600 transition cursor-pointer"
-              >
-                Zpět
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 2: Přesun / sloučení stolu */}
-      {showTransferModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-            <h3 className="text-2xl font-black text-slate-900">Přesunout stůl</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Vyber cílový stůl, na který chceš převést účet:
-            </p>
-
-            <div className="mt-4 max-h-56 overflow-y-auto space-y-2 pr-1">
-              {allTables
-                .filter((t) => t.id !== Number(tableId))
-                .map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => setSelectedTargetTableId(t.id)}
-                    className={`w-full p-3 rounded-2xl border text-left font-bold text-sm transition cursor-pointer flex items-center justify-between ${
-                      selectedTargetTableId === t.id
-                        ? "border-slate-900 bg-slate-900 text-white"
-                        : "border-slate-200 bg-slate-50 text-slate-800 hover:bg-slate-100"
-                    }`}
-                  >
-                    <span>{t.name}</span>
-                    {selectedTargetTableId === t.id && <span>✓</span>}
-                  </button>
-                ))}
-            </div>
-
-            <div className="mt-5 flex flex-col gap-2">
-              <button
-                onClick={handleTransfer}
-                disabled={!selectedTargetTableId || isTransferring}
-                className="w-full rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-95 py-3.5 text-base font-bold text-white shadow transition cursor-pointer disabled:opacity-50"
-              >
-                {isTransferring ? "Přesouvám..." : "Potvrdit přesun / sloučení"}
-              </button>
-              <button
-                onClick={() => setShowTransferModal(false)}
-                disabled={isTransferring}
-                className="w-full rounded-2xl bg-slate-100 hover:bg-slate-200 py-3 text-sm font-semibold text-slate-600 transition cursor-pointer"
-              >
-                Zrušit
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 3: Rezervace stolu */}
+      {/* MODÁL: REZERVACE STOLU */}
       {showReservationModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-            <h3 className="text-xl font-black text-slate-900">Rezervace stolu</h3>
-            <p className="mt-1 text-xs text-slate-500">
-              Nastavení času příchodu a jména hosta
-            </p>
-
-            <div className="mt-4 space-y-3">
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl space-y-4">
+            <h3 className="text-base font-black text-slate-900">
+              Rezervace stolu ({table?.name})
+            </h3>
+            <div className="space-y-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Čas příchodu
-                </label>
-                <input
-                  type="time"
-                  value={resTime}
-                  onChange={(e) => setResTime(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Jméno / Firma
+                <label className="text-xs font-bold text-slate-600 block mb-1">
+                  Jméno hosta:
                 </label>
                 <input
                   type="text"
                   placeholder="např. Novák"
                   value={resName}
                   onChange={(e) => setResName(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900"
                 />
               </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Počet osob
-                </label>
-                <input
-                  type="number"
-                  placeholder="např. 4"
-                  value={resPax}
-                  onChange={(e) => setResPax(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-amber-500"
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">
+                    Čas rezervace:
+                  </label>
+                  <input
+                    type="time"
+                    value={resTime}
+                    onChange={(e) => setResTime(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">
+                    Počet osob:
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="např. 4"
+                    value={resPax}
+                    onChange={(e) => setResPax(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900"
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="mt-6 flex flex-col gap-2">
-              <button
-                onClick={() => handleSaveReservation(false)}
-                disabled={isSavingRes}
-                className="w-full rounded-2xl bg-amber-500 hover:bg-amber-600 active:scale-95 py-3 text-sm font-bold text-white shadow transition cursor-pointer disabled:opacity-50"
-              >
-                {isSavingRes ? "Ukládám..." : "Uložit rezervaci"}
-              </button>
-
+            <div className="flex flex-col gap-2 pt-2">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowReservationModal(false)}
+                  className="flex-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 text-xs transition cursor-pointer"
+                >
+                  Zavřít
+                </button>
+                <button
+                  onClick={() => handleSaveReservation(false)}
+                  disabled={isSavingRes}
+                  className="flex-1 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold py-2 text-xs transition cursor-pointer disabled:opacity-50"
+                >
+                  Uložit rezervaci
+                </button>
+              </div>
               {table?.status === "reserved" && (
                 <button
                   onClick={() => handleSaveReservation(true)}
                   disabled={isSavingRes}
-                  className="w-full rounded-2xl border border-red-200 bg-red-50 hover:bg-red-100 py-2.5 text-xs font-bold text-red-600 transition cursor-pointer"
+                  className="w-full rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 font-bold py-2 text-xs transition cursor-pointer"
                 >
-                  Zrušit rezervaci (uvolnit stůl)
+                  Zrušit rezervaci
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
 
+      {/* MODÁL: POZNÁMKA K POLOŽCE */}
+      {editingItemNote && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl space-y-4">
+            <h3 className="text-base font-black text-slate-900">
+              Poznámka k jídlu ({editingItemNote.productName})
+            </h3>
+            <input
+              type="text"
+              placeholder="např. bez cibule, dobře propečený..."
+              value={itemNoteText}
+              onChange={(e) => setItemNoteText(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900"
+              autoFocus
+            />
+            <div className="flex gap-2">
               <button
-                onClick={() => setShowReservationModal(false)}
-                disabled={isSavingRes}
-                className="w-full rounded-2xl bg-slate-100 hover:bg-slate-200 py-2.5 text-xs font-semibold text-slate-600 transition cursor-pointer"
+                onClick={() => setEditingItemNote(null)}
+                className="flex-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 text-xs transition cursor-pointer"
               >
-                Zavřít
+                Zrušit
+              </button>
+              <button
+                onClick={saveItemNote}
+                className="flex-1 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold py-2 text-xs transition cursor-pointer"
+              >
+                Uložit
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL 4: Tisk bonu a účtenky */}
-      <ReceiptPrintModal
-        isOpen={showPrintModal}
-        onClose={() => setShowPrintModal(false)}
-        tableName={table?.name || `Stůl ${tableId}`}
-        items={items}
-        totalAmount={total}
-        mode={printMode}
-      />
-
-      {/* MODAL 5: Poznámka k položce */}
-      {editingItemNote && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-            <h3 className="text-xl font-black text-slate-900">
-              Poznámka k položce
+      {/* MODÁL: PŘESUN / SLOUČENÍ STOLŮ */}
+      {showTransferModal && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl space-y-4">
+            <h3 className="text-base font-black text-slate-900">
+              Přesunout / Sloučit stůl
             </h3>
-            <p className="mt-1 text-xs text-slate-500 font-bold">
-              {editingItemNote.productName}
+            <p className="text-xs text-slate-500">
+              Vyber cílový stůl, kam chceš převést všechny položky:
             </p>
-
-            <div className="mt-4 space-y-3">
-              <input
-                type="text"
-                placeholder="např. Bez cibule, S sebou..."
-                value={itemNoteText}
-                onChange={(e) => setItemNoteText(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900"
-                autoFocus
-              />
-
-              {/* Rychlé předvolby */}
-              <div className="flex flex-wrap gap-1.5">
-                {["S sebou", "Bez cibule", "Tatarka navíc", "Bez ledu", "Propečený"].map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => setItemNoteText(preset)}
-                    className="rounded-lg bg-slate-100 hover:bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 transition cursor-pointer"
-                  >
-                    {preset}
-                  </button>
+            <select
+              value={selectedTargetTableId || ""}
+              onChange={(e) => setSelectedTargetTableId(Number(e.target.value))}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900"
+            >
+              <option value="">-- Vyber stůl --</option>
+              {allTables
+                .filter((t) => t.id !== Number(tableId))
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
                 ))}
-              </div>
-            </div>
-
-            <div className="mt-6 flex flex-col gap-2">
+            </select>
+            <div className="flex gap-2">
               <button
-                onClick={saveItemNote}
-                className="w-full rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-95 py-3 text-sm font-bold text-white shadow transition cursor-pointer"
+                onClick={() => setShowTransferModal(false)}
+                className="flex-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 text-xs transition cursor-pointer"
               >
-                Uložit poznámku
+                Zavřít
               </button>
-              {editingItemNote.note && (
-                <button
-                  onClick={() => {
-                    setItemNoteText("");
-                    saveItemNote();
-                  }}
-                  className="w-full rounded-2xl border border-red-200 bg-red-50 hover:bg-red-100 py-2 text-xs font-bold text-red-600 transition cursor-pointer"
-                >
-                  Smazat poznámku
-                </button>
-              )}
               <button
-                onClick={() => setEditingItemNote(null)}
-                className="w-full rounded-2xl bg-slate-100 hover:bg-slate-200 py-2.5 text-xs font-semibold text-slate-600 transition cursor-pointer"
+                onClick={handleTransfer}
+                disabled={!selectedTargetTableId || isTransferring}
+                className="flex-1 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold py-2 text-xs transition disabled:opacity-40 cursor-pointer"
               >
-                Zrušit
+                {isTransferring ? "Přesouvám..." : "Přesunout"}
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODÁL: TISK DOKLADU / BONU */}
+      {showPrintModal && table && (
+        <ReceiptPrintModal
+          isOpen={showPrintModal}
+          onClose={() => setShowPrintModal(false)}
+          tableName={table.name}
+          items={items}
+          totalAmount={total}
+          paymentMethod={lastPaymentMethod}
+          mode={printMode}
+        />
       )}
     </main>
   );
