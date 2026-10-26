@@ -24,21 +24,36 @@ export default function KitchenPage() {
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState<Date>(new Date());
   const [showCompleted, setShowCompleted] = useState(false);
-  const [audioEnabled, setAudioEnabled] = useState(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
 
   const isInitialLoadRef = useRef(true);
   const prevPendingItemIdsRef = useRef<Set<number>>(new Set());
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  // Inicializace a odemčení AudioContextu prvním dotykem
+  const unlockAudio = () => {
+    try {
+      if (!audioCtxRef.current) {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          audioCtxRef.current = new AudioCtx();
+        }
+      }
+      if (audioCtxRef.current && audioCtxRef.current.state === "suspended") {
+        audioCtxRef.current.resume();
+      }
+      setAudioUnlocked(true);
+    } catch (e) {
+      console.warn("Audio unlock failed:", e);
+    }
+  };
 
   // Hlasitý hotelový gong (Ding-Dong)
   const playKitchenBell = () => {
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-
-      if (ctx.state === "suspended") {
-        ctx.resume();
-      }
+      unlockAudio();
+      const ctx = audioCtxRef.current;
+      if (!ctx) return;
 
       const t = ctx.currentTime;
 
@@ -47,19 +62,19 @@ export default function KitchenPage() {
       const gain1 = ctx.createGain();
       osc1.type = "sine";
       osc1.frequency.setValueAtTime(987.77, t);
-      gain1.gain.setValueAtTime(0.85, t);
-      gain1.gain.exponentialRampToValueAtTime(0.0001, t + 0.75);
+      gain1.gain.setValueAtTime(0.9, t);
+      gain1.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
       osc1.connect(gain1);
       gain1.connect(ctx.destination);
       osc1.start(t);
-      osc1.stop(t + 0.75);
+      osc1.stop(t + 0.8);
 
       // 2. DONG (hlubší tón s dlouhým dozvukem)
       const osc2 = ctx.createOscillator();
       const gain2 = ctx.createGain();
       osc2.type = "sine";
       osc2.frequency.setValueAtTime(659.25, t + 0.28);
-      gain2.gain.setValueAtTime(0.85, t + 0.28);
+      gain2.gain.setValueAtTime(0.9, t + 0.28);
       gain2.gain.exponentialRampToValueAtTime(0.0001, t + 1.8);
       osc2.connect(gain2);
       gain2.connect(ctx.destination);
@@ -74,7 +89,7 @@ export default function KitchenPage() {
     try {
       const res = await fetch("/api/kitchen", {
         cache: "no-store",
-        headers: { "Pragma": "no-cache", "Cache-Control": "no-cache" },
+        headers: { Pragma: "no-cache", "Cache-Control": "no-cache" },
       });
       if (res.ok) {
         const data: KitchenTicket[] = await res.json();
@@ -92,6 +107,7 @@ export default function KitchenPage() {
           isInitialLoadRef.current = false;
           prevPendingItemIdsRef.current = currentPendingIds;
         } else {
+          // Zjištění nových jídel
           const hasNew = Array.from(currentPendingIds).some(
             (id) => !prevPendingItemIdsRef.current.has(id)
           );
@@ -115,13 +131,21 @@ export default function KitchenPage() {
     const interval = setInterval(fetchTickets, 3000);
     const clock = setInterval(() => setNow(new Date()), 30000);
 
+    // Jakýkoliv klik na stránku kuchyně aktivuje AudioContext
+    const handleGlobalClick = () => unlockAudio();
+    window.addEventListener("click", handleGlobalClick, { once: true });
+    window.addEventListener("touchstart", handleGlobalClick, { once: true });
+
     return () => {
       clearInterval(interval);
       clearInterval(clock);
+      window.removeEventListener("click", handleGlobalClick);
+      window.removeEventListener("touchstart", handleGlobalClick);
     };
   }, []);
 
   const toggleItemStatus = async (itemId: number, currentStatus: string) => {
+    unlockAudio();
     const nextStatus = currentStatus === "DONE" ? "PENDING" : "DONE";
 
     setTickets((prev) =>
@@ -146,6 +170,7 @@ export default function KitchenPage() {
   };
 
   const handleMarkAllOrderDone = async (ticket: KitchenTicket) => {
+    unlockAudio();
     const pendingItems = ticket.items.filter((i) => i.status !== "DONE");
 
     setTickets((prev) =>
@@ -242,7 +267,10 @@ export default function KitchenPage() {
   const displayedTickets = showCompleted ? completedTickets : activeTickets;
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col select-none p-4">
+    <main
+      onClick={unlockAudio}
+      className="min-h-screen bg-slate-950 text-slate-100 flex flex-col select-none p-4"
+    >
       <header className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
         <div className="flex items-center gap-3">
           <Link
@@ -252,23 +280,24 @@ export default function KitchenPage() {
             ← Zpět
           </Link>
           <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
-            🍳 Kuchyně (KDS)
+            👨‍🍳 Kuchyně (KDS)
           </h1>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Tlačítko pro manuální otestování a odemčení zvuku */}
           <button
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               playKitchenBell();
-              setAudioEnabled(true);
             }}
-            className={`rounded-xl px-3 py-1.5 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-              audioEnabled
-                ? "bg-emerald-950 border border-emerald-700 text-emerald-300"
-                : "bg-slate-800 hover:bg-slate-700 text-slate-300"
+            className={`rounded-xl px-3.5 py-2 text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-xs ${
+              audioUnlocked
+                ? "bg-emerald-950 border border-emerald-600 text-emerald-300"
+                : "bg-amber-500 hover:bg-amber-400 text-slate-950 animate-pulse"
             }`}
           >
-            🔔 Zvuk {audioEnabled ? "aktivní" : "zapnout"}
+            🔔 {audioUnlocked ? "Zvuk aktivní (Otestovat)" : "Zapnout zvuk"}
           </button>
 
           <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs font-bold">
@@ -367,68 +396,50 @@ export default function KitchenPage() {
                         <button
                           key={item.id}
                           onClick={() => toggleItemStatus(item.id, item.status)}
-                          className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition cursor-pointer active:scale-98 ${
+                          className={`w-full text-left p-2.5 rounded-xl border transition cursor-pointer flex flex-col gap-1 ${
                             isDone
-                              ? "border-emerald-800/60 bg-emerald-950/30 text-emerald-300"
-                              : "border-slate-700 bg-slate-800 hover:border-amber-500 text-white"
+                              ? "border-slate-800/80 bg-slate-950/40 opacity-40 line-through"
+                              : "border-slate-700 bg-slate-800/80 hover:bg-slate-700/80"
                           }`}
                         >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span
-                              className={`w-5 h-5 rounded-md flex items-center justify-center text-xs font-black shrink-0 ${
-                                isDone
-                                  ? "bg-emerald-500 text-slate-950"
-                                  : "border border-slate-500 text-transparent"
-                              }`}
-                            >
-                              ✓
+                          <div className="flex items-center justify-between">
+                            <span className="font-extrabold text-sm text-white">
+                              {item.name}
                             </span>
-                            <div className="flex flex-col min-w-0">
-                              <span
-                                className={`font-extrabold text-sm truncate ${
-                                  isDone ? "line-through opacity-60" : ""
-                                }`}
-                              >
-                                {item.name}
-                              </span>
-                              {item.note && (
-                                <span className="text-xs font-bold text-amber-400 italic">
-                                  ↳ {item.note}
-                                </span>
-                              )}
-                            </div>
+                            <span className="bg-amber-400 text-slate-950 font-black px-2 py-0.5 rounded-md text-xs">
+                              {item.quantity}×
+                            </span>
                           </div>
 
-                          <span
-                            className={`font-black text-xs px-2 py-0.5 rounded shrink-0 ml-2 ${
-                              isDone
-                                ? "bg-emerald-900/50 text-emerald-300"
-                                : "bg-white text-slate-950"
-                            }`}
-                          >
-                            {item.quantity}×
-                          </span>
+                          {item.note && (
+                            <span className="text-xs font-bold text-amber-300 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/40 inline-block self-start">
+                              ↳ POZN: {item.note}
+                            </span>
+                          )}
                         </button>
                       );
                     })}
                   </div>
 
-                  <div className="p-3 border-t border-slate-800/80 bg-slate-900/40 flex items-center gap-2">
+                  <div className="p-3 border-t border-slate-800 bg-slate-900/90 flex gap-2">
                     <button
                       onClick={() => handlePrint(ticket)}
-                      className="rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 px-3 py-2 text-xs font-bold text-slate-200 transition active:scale-95 cursor-pointer"
-                      title="Vytisknout papírový bon"
+                      className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition cursor-pointer"
+                      title="Vytisknout bon"
                     >
-                      🖨️
+                      🖨️ Bon
                     </button>
-
-                    {hasPending && (
+                    {hasPending ? (
                       <button
                         onClick={() => handleMarkAllOrderDone(ticket)}
-                        className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 py-2 text-xs font-black text-white shadow transition active:scale-95 cursor-pointer"
+                        className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black transition cursor-pointer shadow-xs active:scale-95"
                       >
-                        ✓ Vydat celý stůl
+                        ✓ Vydat vše
                       </button>
+                    ) : (
+                      <div className="flex-1 text-center py-2 text-xs font-bold text-emerald-400">
+                        Vše připraveno
+                      </div>
                     )}
                   </div>
                 </div>

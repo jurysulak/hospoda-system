@@ -5,7 +5,20 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    // Načteme všechny otevřené objednávky se všemi položkami
+    // 1. Zjistíme ID všech produktů, které NEPATŘÍ do kuchyně (nápoje, pivo, alkohol)
+    // Případně vyfiltrujeme jen kategorie "Jídlo", "Kuchyně", "Menu" apod.
+    const kitchenProducts = await prisma.product.findMany({
+      where: {
+        category: {
+          notIn: ["Pivo", "Alkohol", "Nealko", "Víno", "Káva", "Teplé nápoje"],
+        },
+      },
+      select: { id: true },
+    });
+
+    const kitchenProductIds = kitchenProducts.map((p) => p.id);
+
+    // 2. Načteme otevřené objednávky pouze s položkami do kuchyně
     const openOrders = await prisma.order.findMany({
       where: {
         status: "open",
@@ -13,6 +26,9 @@ export async function GET() {
       include: {
         table: true,
         items: {
+          where: {
+            productId: { in: kitchenProductIds },
+          },
           orderBy: { id: "asc" },
         },
       },
@@ -21,7 +37,7 @@ export async function GET() {
       },
     });
 
-    // Převedeme na formát pro kuchyňské bony
+    // 3. Převedeme na formát pro kuchyňské bony (zobrazíme jen stoly, co mají jídlo)
     const kitchenTickets = openOrders
       .filter((order) => order.items.length > 0)
       .map((order) => ({
