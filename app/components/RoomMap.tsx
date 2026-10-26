@@ -30,6 +30,8 @@ export default function RoomMap({
   const [tables, setTables] = useState<TableData[]>(initialTables);
   const [isEditMode, setIsEditMode] = useState(false);
   const [newTableName, setNewTableName] = useState("");
+  // Přepínač zobrazení: "grid" (mobilní dlaždice) nebo "map" (2D plánek)
+  const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
 
   const [activeAction, setActiveAction] = useState<"drag" | "resize" | null>(null);
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -50,6 +52,13 @@ export default function RoomMap({
   });
 
   const floorRef = useRef<HTMLDivElement>(null);
+
+  // Na větších displejích (tablet/PC) zvolíme výchozí mapu, na mobilu mřížku
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth >= 768) {
+      setViewMode("map");
+    }
+  }, []);
 
   // 1. Automatická synchronizace na pozadí (každé 4 sekundy)
   useEffect(() => {
@@ -216,7 +225,7 @@ export default function RoomMap({
     }
   };
 
-  // 7. Smazání stolu (včetně ošetření kaskády)
+  // 7. Smazání stolu (včetně kaskády)
   const handleDeleteTable = async (tableId: number, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -260,28 +269,63 @@ export default function RoomMap({
 
   return (
     <div className="flex-1 flex flex-col min-h-0 space-y-2 overflow-hidden">
-      {/* Kompaktní ovládací lišta */}
-      <div className="flex items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 shadow-xs shrink-0">
-        <button
-          type="button"
-          onClick={() => setIsEditMode(!isEditMode)}
-          className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
-            isEditMode
-              ? "bg-amber-600 text-white hover:bg-amber-700 shadow"
-              : "bg-slate-800 text-white hover:bg-slate-700"
-          }`}
-        >
-          {isEditMode ? "✓ Dokončit úpravy" : "⚙ Upravit rozestavení"}
-        </button>
+      {/* Kompaktní horní lišta */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 shadow-xs shrink-0">
+        <div className="flex items-center gap-1.5">
+          {/* Přepínač zobrazení pro telefon vs tablet */}
+          <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode("grid");
+                setIsEditMode(false);
+              }}
+              className={`px-2.5 py-1 text-xs font-bold rounded-md transition ${
+                viewMode === "grid"
+                  ? "bg-white text-slate-900 shadow-xs"
+                  : "text-slate-500 hover:text-slate-900"
+              }`}
+              title="Mobilní přehled všech stolů"
+            >
+              📱 Seznam
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("map")}
+              className={`px-2.5 py-1 text-xs font-bold rounded-md transition ${
+                viewMode === "map"
+                  ? "bg-white text-slate-900 shadow-xs"
+                  : "text-slate-500 hover:text-slate-900"
+              }`}
+              title="2D Rozmístění stolů"
+            >
+              🗺️ Plánek
+            </button>
+          </div>
 
-        {isEditMode && (
+          {viewMode === "map" && (
+            <button
+              type="button"
+              onClick={() => setIsEditMode(!isEditMode)}
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                isEditMode
+                  ? "bg-amber-600 text-white hover:bg-amber-700 shadow"
+                  : "bg-slate-800 text-white hover:bg-slate-700"
+              }`}
+            >
+              {isEditMode ? "✓ Hotovo" : "⚙ Upravit"}
+            </button>
+          )}
+        </div>
+
+        {isEditMode && viewMode === "map" && (
           <form onSubmit={handleAddTable} className="flex items-center gap-1.5">
             <input
               type="text"
               placeholder="Název stolu"
               value={newTableName}
               onChange={(e) => setNewTableName(e.target.value)}
-              className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-28 rounded-lg border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
             <button
               type="submit"
@@ -293,132 +337,186 @@ export default function RoomMap({
         )}
       </div>
 
-      {/* Jednotné širokoúhlé plátno bez scrollování */}
-      <div className="w-full flex-1 min-h-0 rounded-2xl border border-slate-300 bg-white p-2 shadow-xs overflow-hidden">
-        <div
-          ref={floorRef}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          className={`relative w-full h-full rounded-xl select-none overflow-hidden transition-all ${
-            isEditMode
-              ? "bg-[radial-gradient(#94a3b8_1px,transparent_1px)] [background-size:15px_15px] bg-slate-100 border-2 border-dashed border-amber-400"
-              : "bg-slate-50 border border-slate-200"
-          }`}
-        >
-          {tables.map((table) => {
-            const hasItems = table.itemCount > 0;
-            const isReserved = !hasItems && table.status === "reserved";
-            const isOccupied = hasItems;
-            const isFree = !isReserved && !isOccupied;
+      {/* 1. MOBILNÍ ZOBRAZENÍ: Přehledná mřížka všech stolů (1–2 sloupce na mobilu, 3–4 na tabletu) */}
+      {viewMode === "grid" ? (
+        <div className="flex-1 min-h-0 overflow-y-auto rounded-2xl border border-slate-300 bg-white p-3 shadow-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+            {tables.map((table) => {
+              const hasItems = table.itemCount > 0;
+              const isReserved = !hasItems && table.status === "reserved";
+              const isOccupied = hasItems;
 
-            return (
-              <div
-                key={table.id}
-                onPointerDown={(e) => handleStartDrag(table, e)}
-                style={{
-                  position: "absolute",
-                  left: `${table.posX}px`,
-                  top: `${table.posY}px`,
-                  width: `${table.width}px`,
-                  height: `${table.height}px`,
-                  touchAction: "none",
-                }}
-                className={`flex flex-col justify-between rounded-xl border-2 p-1.5 shadow-xs transition ${
-                  isEditMode
-                    ? "cursor-grab active:cursor-grabbing border-amber-500 bg-amber-50/95"
-                    : isOccupied
-                    ? "border-red-500 bg-red-50 text-red-950 hover:bg-red-100 cursor-pointer"
-                    : isReserved
-                    ? "border-amber-500 bg-amber-50 text-amber-950 hover:bg-amber-100 cursor-pointer"
-                    : "border-green-500 bg-green-50 text-green-950 hover:bg-green-100 cursor-pointer"
-                }`}
-              >
-                {!isEditMode ? (
-                  <Link
-                    href={`/tables/${table.id}`}
-                    className="flex h-full flex-col justify-between"
-                  >
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="truncate text-xs font-black tracking-wide">
-                        {table.name}
-                      </span>
-                      <span className="text-[10px]">
-                        {isOccupied ? "🔴" : isReserved ? "🟡" : "🟢"}
-                      </span>
-                    </div>
-
-                    {isReserved ? (
-                      <div className="text-[11px] font-bold text-amber-900 leading-tight truncate">
-                        🕒 {table.reservedTime || "Rezervace"}
-                        {table.reservedName && (
-                          <span className="block font-medium truncate text-amber-800 text-[10px]">
-                            {table.reservedName} {table.reservedPax ? `(${table.reservedPax} os.)` : ""}
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex items-end justify-between text-[11px] leading-tight">
-                        <span className="font-medium text-slate-500">
-                          {table.itemCount} ks
-                        </span>
-                        <span className="font-bold text-slate-900">
-                          {table.total} Kč
-                        </span>
-                      </div>
-                    )}
-                  </Link>
-                ) : (
-                  <div className="flex h-full flex-col justify-between relative">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="font-bold text-xs text-slate-900 truncate">
-                        {table.name}
-                      </span>
-                      
-                      {/* Tlačítka pro Přejmenování a Smazání */}
-                      <div
-                        className="flex items-center gap-1 shrink-0"
-                        onPointerDown={(e) => e.stopPropagation()}
-                      >
-                        <button
-                          type="button"
-                          onClick={(e) => handleRenameTable(table, e)}
-                          className="text-slate-600 hover:text-amber-700 font-bold text-xs p-1 rounded hover:bg-amber-100 transition cursor-pointer"
-                          title="Přejmenovat stůl"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteTable(table.id, e)}
-                          className="text-red-500 hover:text-red-700 font-black text-xs p-1 rounded hover:bg-red-100 transition cursor-pointer"
-                          title="Smazat stůl"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
-                      <span>
-                        {table.width}×{table.height}
-                      </span>
-                    </div>
-
-                    {/* Táhlo pro změnu velikosti */}
-                    <div
-                      onPointerDown={(e) => handleStartResize(table, e)}
-                      className="absolute -bottom-1 -right-1 w-4 h-4 bg-amber-500 hover:bg-amber-600 rounded-sm cursor-se-resize flex items-center justify-center shadow"
-                      title="Táhnutím změň velikost"
-                    >
-                      <div className="w-1.5 h-1.5 border-r border-b border-white" />
-                    </div>
+              return (
+                <Link
+                  key={table.id}
+                  href={`/tables/${table.id}`}
+                  className={`flex flex-col justify-between p-3 rounded-2xl border-2 transition active:scale-95 shadow-xs min-h-[92px] ${
+                    isOccupied
+                      ? "border-red-500 bg-red-50 text-red-950 hover:bg-red-100"
+                      : isReserved
+                      ? "border-amber-500 bg-amber-50 text-amber-950 hover:bg-amber-100"
+                      : "border-green-500 bg-green-50 text-green-950 hover:bg-green-100"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-black text-sm tracking-tight truncate">
+                      {table.name}
+                    </span>
+                    <span className="text-xs">
+                      {isOccupied ? "🔴" : isReserved ? "🟡" : "🟢"}
+                    </span>
                   </div>
-                )}
-              </div>
-            );
-          })}
+
+                  {isReserved ? (
+                    <div className="text-xs font-bold text-amber-900 truncate">
+                      🕒 {table.reservedTime || "Rezervace"}
+                      {table.reservedName && (
+                        <span className="block font-normal text-[11px] truncate text-amber-800">
+                          {table.reservedName}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-baseline justify-between pt-1">
+                      <span className="text-xs font-medium text-slate-500">
+                        {table.itemCount} položek
+                      </span>
+                      <span className="text-base font-black text-slate-900">
+                        {table.total} Kč
+                      </span>
+                    </div>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ) : (
+        /* 2. PLÁNEK ZOBRAZENÍ: 2D mapa s podporou horizontálního posunu */
+        <div className="w-full flex-1 min-h-0 rounded-2xl border border-slate-300 bg-white p-2 shadow-xs overflow-auto">
+          <div
+            ref={floorRef}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            style={{ minWidth: "750px", minHeight: "480px" }}
+            className={`relative w-full h-full rounded-xl select-none transition-all ${
+              isEditMode
+                ? "bg-[radial-gradient(#94a3b8_1px,transparent_1px)] [background-size:15px_15px] bg-slate-100 border-2 border-dashed border-amber-400"
+                : "bg-slate-50 border border-slate-200"
+            }`}
+          >
+            {tables.map((table) => {
+              const hasItems = table.itemCount > 0;
+              const isReserved = !hasItems && table.status === "reserved";
+              const isOccupied = hasItems;
+
+              return (
+                <div
+                  key={table.id}
+                  onPointerDown={(e) => handleStartDrag(table, e)}
+                  style={{
+                    position: "absolute",
+                    left: `${table.posX}px`,
+                    top: `${table.posY}px`,
+                    width: `${table.width}px`,
+                    height: `${table.height}px`,
+                    touchAction: "none",
+                  }}
+                  className={`flex flex-col justify-between rounded-xl border-2 p-1.5 shadow-xs transition ${
+                    isEditMode
+                      ? "cursor-grab active:cursor-grabbing border-amber-500 bg-amber-50/95"
+                      : isOccupied
+                      ? "border-red-500 bg-red-50 text-red-950 hover:bg-red-100 cursor-pointer"
+                      : isReserved
+                      ? "border-amber-500 bg-amber-50 text-amber-950 hover:bg-amber-100 cursor-pointer"
+                      : "border-green-500 bg-green-50 text-green-950 hover:bg-green-100 cursor-pointer"
+                  }`}
+                >
+                  {!isEditMode ? (
+                    <Link
+                      href={`/tables/${table.id}`}
+                      className="flex h-full flex-col justify-between"
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="truncate text-xs font-black tracking-wide">
+                          {table.name}
+                        </span>
+                        <span className="text-[10px]">
+                          {isOccupied ? "🔴" : isReserved ? "🟡" : "🟢"}
+                        </span>
+                      </div>
+
+                      {isReserved ? (
+                        <div className="text-[11px] font-bold text-amber-900 leading-tight truncate">
+                          🕒 {table.reservedTime || "Rezervace"}
+                          {table.reservedName && (
+                            <span className="block font-medium truncate text-amber-800 text-[10px]">
+                              {table.reservedName}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-end justify-between text-[11px] leading-tight">
+                          <span className="font-medium text-slate-500">
+                            {table.itemCount} ks
+                          </span>
+                          <span className="font-bold text-slate-900">
+                            {table.total} Kč
+                          </span>
+                        </div>
+                      )}
+                    </Link>
+                  ) : (
+                    <div className="flex h-full flex-col justify-between relative">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-bold text-xs text-slate-900 truncate">
+                          {table.name}
+                        </span>
+
+                        <div
+                          className="flex items-center gap-1 shrink-0"
+                          onPointerDown={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => handleRenameTable(table, e)}
+                            className="text-slate-600 hover:text-amber-700 font-bold text-xs p-1 rounded hover:bg-amber-100 transition cursor-pointer"
+                            title="Přejmenovat stůl"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteTable(table.id, e)}
+                            className="text-red-500 hover:text-red-700 font-black text-xs p-1 rounded hover:bg-red-100 transition cursor-pointer"
+                            title="Smazat stůl"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                        <span>
+                          {table.width}×{table.height}
+                        </span>
+                      </div>
+
+                      <div
+                        onPointerDown={(e) => handleStartResize(table, e)}
+                        className="absolute -bottom-1 -right-1 w-4 h-4 bg-amber-500 hover:bg-amber-600 rounded-sm cursor-se-resize flex items-center justify-center shadow"
+                        title="Táhnutím změň velikost"
+                      >
+                        <div className="w-1.5 h-1.5 border-r border-b border-white" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
