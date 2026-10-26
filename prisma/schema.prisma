@@ -88,10 +88,11 @@ model Payment {
   orderId       Int
   payerName     String?
   amount        Int
-  paymentMethod String?  // "cash", "card", "voucher"
+  paymentMethod String? // "cash", "card", "voucher"
+  receiptNumber String? // <-- Přidej tento řádek
   createdAt     DateTime @default(now())
 
-  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
 
 // -------------------------------------------------------------
