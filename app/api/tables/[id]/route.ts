@@ -95,11 +95,50 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await prisma.table.delete({
-      where: { id: Number(id) },
+    const tableId = Number(id);
+
+    if (isNaN(tableId)) {
+      return NextResponse.json({ error: "Neplatné ID stolu" }, { status: 400 });
+    }
+
+    // Kaskádové pročištění navázaných dat a smazání stolu
+    await prisma.$transaction(async (tx) => {
+      // 1. Najdeme ID všech objednávek tohoto stolu
+      const orders = await tx.order.findMany({
+        where: { tableId },
+        select: { id: true },
+      });
+      const orderIds = orders.map((o) => o.id);
+
+      if (orderIds.length > 0) {
+        // 2. Smažeme položky těchto objednávek
+        await tx.orderItem.deleteMany({
+          where: { orderId: { in: orderIds } },
+        });
+
+        // 3. Smažeme navázané platby
+        await tx.payment.deleteMany({
+          where: { orderId: { in: orderIds } },
+        });
+
+        // 4. Smažeme samotné objednávky
+        await tx.order.deleteMany({
+          where: { id: { in: orderIds } },
+        });
+      }
+
+      // 5. Nakonec smažeme stůl
+      await tx.table.delete({
+        where: { id: tableId },
+      });
     });
+
     return NextResponse.json({ success: true });
-  } catch (error) {
-    return NextResponse.json({ error: "Chyba při mazání stolu" }, { status: 500 });
+  } catch (error: any) {
+    console.error("Chyba při mazání stolu:", error);
+    return NextResponse.json(
+      { error: "Chyba při mazání stolu", details: error?.message },
+      { status: 500 }
+    );
   }
 }

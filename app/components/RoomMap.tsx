@@ -51,9 +51,9 @@ export default function RoomMap({
 
   const floorRef = useRef<HTMLDivElement>(null);
 
-  // 1. Automatická tichá synchronizace na pozadí (každé 4 sekundy)
+  // 1. Automatická synchronizace na pozadí (každé 4 sekundy)
   useEffect(() => {
-    if (isEditMode) return; // při editaci neaktualizovat, ať to nepřerušuje tahání
+    if (isEditMode) return;
 
     const interval = setInterval(async () => {
       try {
@@ -216,14 +216,45 @@ export default function RoomMap({
     }
   };
 
-  // 7. Smazání stolu
+  // 7. Smazání stolu (včetně ošetření kaskády)
   const handleDeleteTable = async (tableId: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Opravdu chcete smazat tento stůl?")) return;
+    e.preventDefault();
+    if (!window.confirm("Opravdu chceš smazat tento stůl včetně případné historie?")) return;
 
-    const res = await fetch(`/api/tables/${tableId}`, { method: "DELETE" });
-    if (res.ok) {
-      setTables((prev) => prev.filter((t) => t.id !== tableId));
+    try {
+      const res = await fetch(`/api/tables/${tableId}`, { method: "DELETE" });
+      if (res.ok) {
+        setTables((prev) => prev.filter((t) => t.id !== tableId));
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || "Nepodařilo se smazat stůl");
+      }
+    } catch (err) {
+      alert("Chyba spojení se serverem při mazání");
+    }
+  };
+
+  // 8. Přejmenování stolu
+  const handleRenameTable = async (table: TableData, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const newName = window.prompt("Zadej nový název stolu:", table.name);
+    if (!newName || !newName.trim() || newName.trim() === table.name) return;
+
+    const trimmedName = newName.trim();
+    setTables((prev) =>
+      prev.map((t) => (t.id === table.id ? { ...t, name: trimmedName } : t))
+    );
+
+    try {
+      await fetch(`/api/tables/${table.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmedName }),
+      });
+    } catch (err) {
+      console.error("Chyba při přejmenování stolu:", err);
     }
   };
 
@@ -234,10 +265,11 @@ export default function RoomMap({
         <button
           type="button"
           onClick={() => setIsEditMode(!isEditMode)}
-          className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${isEditMode
+          className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+            isEditMode
               ? "bg-amber-600 text-white hover:bg-amber-700 shadow"
               : "bg-slate-800 text-white hover:bg-slate-700"
-            }`}
+          }`}
         >
           {isEditMode ? "✓ Dokončit úpravy" : "⚙ Upravit rozestavení"}
         </button>
@@ -267,18 +299,18 @@ export default function RoomMap({
           ref={floorRef}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          className={`relative w-full h-full rounded-xl select-none overflow-hidden transition-all ${isEditMode
+          className={`relative w-full h-full rounded-xl select-none overflow-hidden transition-all ${
+            isEditMode
               ? "bg-[radial-gradient(#94a3b8_1px,transparent_1px)] [background-size:15px_15px] bg-slate-100 border-2 border-dashed border-amber-400"
               : "bg-slate-50 border border-slate-200"
-            }`}
+          }`}
         >
           {tables.map((table) => {
-            // NOVÝ KÓD:
             const hasItems = table.itemCount > 0;
             const isReserved = !hasItems && table.status === "reserved";
-            // Stůl je obsazený POUZE pokud má reálně namarkované položky:
             const isOccupied = hasItems;
             const isFree = !isReserved && !isOccupied;
+
             return (
               <div
                 key={table.id}
@@ -291,14 +323,15 @@ export default function RoomMap({
                   height: `${table.height}px`,
                   touchAction: "none",
                 }}
-                className={`flex flex-col justify-between rounded-xl border-2 p-1.5 shadow-xs transition ${isEditMode
+                className={`flex flex-col justify-between rounded-xl border-2 p-1.5 shadow-xs transition ${
+                  isEditMode
                     ? "cursor-grab active:cursor-grabbing border-amber-500 bg-amber-50/95"
                     : isOccupied
-                      ? "border-red-500 bg-red-50 text-red-950 hover:bg-red-100 cursor-pointer"
-                      : isReserved
-                        ? "border-amber-500 bg-amber-50 text-amber-950 hover:bg-amber-100 cursor-pointer"
-                        : "border-green-500 bg-green-50 text-green-950 hover:bg-green-100 cursor-pointer"
-                  }`}
+                    ? "border-red-500 bg-red-50 text-red-950 hover:bg-red-100 cursor-pointer"
+                    : isReserved
+                    ? "border-amber-500 bg-amber-50 text-amber-950 hover:bg-amber-100 cursor-pointer"
+                    : "border-green-500 bg-green-50 text-green-950 hover:bg-green-100 cursor-pointer"
+                }`}
               >
                 {!isEditMode ? (
                   <Link
@@ -336,17 +369,33 @@ export default function RoomMap({
                   </Link>
                 ) : (
                   <div className="flex h-full flex-col justify-between relative">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-1">
                       <span className="font-bold text-xs text-slate-900 truncate">
                         {table.name}
                       </span>
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteTable(table.id, e)}
-                        className="text-red-500 hover:text-red-700 font-bold text-xs px-1 cursor-pointer"
+                      
+                      {/* Tlačítka pro Přejmenování a Smazání */}
+                      <div
+                        className="flex items-center gap-1 shrink-0"
+                        onPointerDown={(e) => e.stopPropagation()}
                       >
-                        ✕
-                      </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleRenameTable(table, e)}
+                          className="text-slate-600 hover:text-amber-700 font-bold text-xs p-1 rounded hover:bg-amber-100 transition cursor-pointer"
+                          title="Přejmenovat stůl"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteTable(table.id, e)}
+                          className="text-red-500 hover:text-red-700 font-black text-xs p-1 rounded hover:bg-red-100 transition cursor-pointer"
+                          title="Smazat stůl"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
 
                     <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
@@ -355,6 +404,7 @@ export default function RoomMap({
                       </span>
                     </div>
 
+                    {/* Táhlo pro změnu velikosti */}
                     <div
                       onPointerDown={(e) => handleStartResize(table, e)}
                       className="absolute -bottom-1 -right-1 w-4 h-4 bg-amber-500 hover:bg-amber-600 rounded-sm cursor-se-resize flex items-center justify-center shadow"
