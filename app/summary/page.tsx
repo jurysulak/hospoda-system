@@ -26,7 +26,7 @@ export default function SummaryPage() {
   const [data, setData] = useState<SummaryData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Získání aktuálního PINu z prohlížeče (nebo výchozí 1234)
+  // Získání uloženého PINu nebo výchozí 1234
   const getMasterPin = () => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("gastro_summary_pin") || "1234";
@@ -84,7 +84,7 @@ export default function SummaryPage() {
           });
         }
       } catch (err) {
-        console.error("Chyba načítání dat:", err);
+        console.error("Chyba při načítání souhrnu:", err);
       } finally {
         setLoading(false);
       }
@@ -93,6 +93,7 @@ export default function SummaryPage() {
     fetchSummary();
   }, [isUnlocked]);
 
+  // Obsluha klávesnice PINu
   const handlePinPress = (digit: string) => {
     if (pinInput.length >= 4) return;
     setPinError(false);
@@ -118,7 +119,49 @@ export default function SummaryPage() {
     setPinInput((prev) => prev.slice(0, -1));
   };
 
-  // ZÁMEK: Při každé návštěvě vyžaduje PIN
+  // Export denního přehledu do CSV pro Excel
+  const handleExportCSV = () => {
+    if (!data) return;
+
+    const todayStr = new Date().toLocaleDateString("cs-CZ");
+    const fileDate = new Date().toISOString().slice(0, 10);
+
+    const rows: string[][] = [
+      ["DENNÍ SOUHRN TRŽEB", todayStr],
+      [],
+      ["PŘEHLED FINANCÍ", "ČÁSTKA"],
+      ["Tržba celkem", `${data.totalRevenue} Kč`],
+      ["Hotovost", `${data.cashRevenue} Kč`],
+      ["Kartou", `${data.cardRevenue} Kč`],
+      ["Počet uzavřených účtů", `${data.orderCount}`],
+      [],
+      ["TRŽBA PODLE STOLŮ", "ČÁSTKA"],
+      ...data.byTable.map((t) => [t.tableName, `${t.amount} Kč`]),
+      [],
+      ["NEJPRODÁVANĚJŠÍ POLOŽKY", "POČET KS", "CELKOVÁ TRŽBA"],
+      ...data.topProducts.map((p) => [p.name, `${p.quantity}`, `${p.revenue} Kč`]),
+    ];
+
+    const csvContent =
+      "\uFEFF" +
+      rows
+        .map((r) =>
+          r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(";")
+        )
+        .join("\r\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `denni-uzaverka-${fileDate}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // 1. ZAMČENÁ OBRAZOVKA (PIN TREZOR)
   if (!isUnlocked) {
     return (
       <main className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 select-none">
@@ -134,6 +177,7 @@ export default function SummaryPage() {
             Zadej 4místný PIN pro zobrazení tržeb
           </p>
 
+          {/* Kuličky PINu */}
           <div className={`flex gap-3 mb-8 transition-transform ${pinError ? "animate-shake" : ""}`}>
             {[0, 1, 2, 3].map((index) => {
               const isFilled = pinInput.length > index;
@@ -152,6 +196,7 @@ export default function SummaryPage() {
             })}
           </div>
 
+          {/* Dotykový číselník */}
           <div className="grid grid-cols-3 gap-3 w-full mb-6">
             {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((num) => (
               <button
@@ -195,10 +240,12 @@ export default function SummaryPage() {
     );
   }
 
+  // 2. ODEMČENÝ SOUHRN TRŽEB
   return (
     <main className="min-h-screen bg-slate-100 p-4 sm:p-6 select-none">
       <div className="mx-auto max-w-5xl space-y-5">
-        {/* Horní hlavička */}
+        
+        {/* Horní hlavička s tlačítky */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Link
@@ -213,6 +260,14 @@ export default function SummaryPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Tlačítko pro export do Excelu */}
+            <button
+              onClick={handleExportCSV}
+              className="rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3.5 py-2 text-xs font-black shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1.5"
+            >
+              📥 Export do CSV
+            </button>
+
             <Link
               href="/settings"
               className="rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-700 shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1.5"
@@ -239,6 +294,7 @@ export default function SummaryPage() {
           </div>
         ) : (
           <>
+            {/* 4 hlavní karty tržby */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
                 <span className="text-xs font-bold text-slate-400 block uppercase">Tržba celkem</span>
@@ -266,6 +322,7 @@ export default function SummaryPage() {
               </div>
             </div>
 
+            {/* Tržba podle stolů */}
             {data.byTable.length > 0 && (
               <div className="rounded-3xl bg-white border border-slate-200 shadow-xs p-4">
                 <h2 className="text-base font-black text-slate-900 mb-3">
@@ -289,6 +346,7 @@ export default function SummaryPage() {
               </div>
             )}
 
+            {/* Nejprodávanější jídla a nápoje */}
             <div className="rounded-3xl bg-white border border-slate-200 shadow-xs overflow-hidden">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between">
                 <h2 className="text-base font-black text-slate-900">
@@ -333,6 +391,7 @@ export default function SummaryPage() {
             </div>
           </>
         )}
+
       </div>
     </main>
   );
