@@ -6,40 +6,37 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, category, price, vatRate } = body;
+    const { name, category, price } = body;
 
-    if (!name || name.trim() === "") {
+    if (!name || typeof name !== "string" || !name.trim()) {
       return NextResponse.json(
-        { error: "Název produktu je povinný" },
+        { error: "Název položky je povinný" },
         { status: 400 }
       );
     }
 
-    const numericPrice = Math.round(Number(price));
-    if (isNaN(numericPrice) || numericPrice < 0) {
+    const parsedPrice = parseInt(String(price), 10);
+    if (isNaN(parsedPrice) || parsedPrice < 0) {
       return NextResponse.json(
-        { error: "Neplatná cena produktu" },
+        { error: "Cena musí být platné kladné číslo" },
         { status: 400 }
       );
     }
 
-    const numericVatRate = vatRate ? Number(vatRate) : (category === "Jídlo" ? 12 : 21);
-
-    const product = await prisma.product.create({
+    const newProduct = await prisma.product.create({
       data: {
         name: name.trim(),
-        category: category?.trim() || "Ostatní",
-        price: numericPrice,
-        vatRate: isNaN(numericVatRate) ? 21 : numericVatRate,
+        category: category?.trim() || "Nezařazeno",
+        price: parsedPrice,
         isActive: true,
       },
     });
 
-    return NextResponse.json(product, { status: 201 });
+    return NextResponse.json(newProduct, { status: 201 });
   } catch (error: any) {
-    console.error("Chyba při vytváření produktu:", error);
+    console.error("POST product/create error:", error);
     return NextResponse.json(
-      { error: "Nepodařilo se vytvořit produkt", details: error?.message },
+      { error: "Chyba na serveru při vytváření produktu", details: error?.message },
       { status: 500 }
     );
   }
