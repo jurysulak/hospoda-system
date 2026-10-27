@@ -91,7 +91,7 @@ export default function TableDetailPage() {
   const currentOrder = table?.orders?.[0] || null;
   const rawItems = currentOrder?.items || [];
 
-  // 1. SESKUPENÍ ŽLUTÝCH POLOŽEK (PENDING) DO JEDNOHO ŘÁDKU
+  // Seskupení položek v přípravě (PENDING)
   const groupedPendingItems = useMemo(() => {
     const pendings = rawItems.filter((i) => i.status === "PENDING");
     const map = new Map<string, { itemIds: number[]; sampleItem: OrderItem; totalQty: number }>();
@@ -114,12 +114,12 @@ export default function TableDetailPage() {
     return Array.from(map.values());
   }, [rawItems]);
 
-  // Vydané položky na hlavním účtu
+  // Vydané položky na účtu
   const servedItems = useMemo(() => {
     return rawItems.filter((i) => i.status !== "PENDING");
   }, [rawItems]);
 
-  // Seřazení kategorií dle četnosti
+  // Seřazení kategorií
   const sortedCategories = useMemo(() => {
     const unique = Array.from(new Set(products.map((p) => p.category.trim())));
     return [
@@ -132,7 +132,7 @@ export default function TableDetailPage() {
     ];
   }, [products]);
 
-  // Seřazené položky v aktivní kategorii
+  // Položky v aktivní kategorii
   const displayedProducts = useMemo(() => {
     let list = products;
     if (activeCategory !== "Vše") {
@@ -146,7 +146,7 @@ export default function TableDetailPage() {
     });
   }, [products, activeCategory]);
 
-  // Přidání produktu z nabídky
+  // Přidání položky z nabídky
   const handleAddProduct = async (product: Product) => {
     try {
       await fetch(`/api/tables/${tableId}/items`, {
@@ -160,8 +160,26 @@ export default function TableDetailPage() {
     }
   };
 
-  // Vydání seskupené žluté položky (přesune všechny kusy daného druhu do vydaného účtu)
-  const handleServeGroup = async (itemIds: number[]) => {
+  // Vydání POUZE JEDNOHO KUSU ze žluté skupiny (kliknutím na řádek)
+  const handleServeSingleItem = async (itemIds: number[]) => {
+    if (itemIds.length === 0) return;
+    const targetId = itemIds[0];
+
+    try {
+      await fetch(`/api/order-items/${targetId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "SERVED" }),
+      });
+      loadData();
+    } catch (e) {
+      console.error("Chyba při výdeji kusu:", e);
+    }
+  };
+
+  // Vydání VŠECH KUSŮ z dané žluté skupiny
+  const handleServeGroupAll = async (e: React.MouseEvent, itemIds: number[]) => {
+    e.stopPropagation();
     try {
       for (const id of itemIds) {
         await fetch(`/api/order-items/${id}/status`, {
@@ -172,11 +190,11 @@ export default function TableDetailPage() {
       }
       loadData();
     } catch (e) {
-      console.error("Chyba při výdeji:", e);
+      console.error("Chyba při výdeji skupiny:", e);
     }
   };
 
-  // Ubrání 1 ks ze žluté skupiny (smaže nebo sníží poslední záznam)
+  // Ubrání 1 ks ze žluté skupiny
   const handleDecreasePendingGroup = async (e: React.MouseEvent, itemIds: number[]) => {
     e.stopPropagation();
     if (itemIds.length === 0) return;
@@ -194,7 +212,7 @@ export default function TableDetailPage() {
     }
   };
 
-  // Hromadné vydání všech položek v přípravě naráz
+  // Hromadné vydání úplně všech žlutých položek na stole
   const handleServeAllPending = async () => {
     try {
       const allPendingIds = groupedPendingItems.flatMap((g) => g.itemIds);
@@ -233,7 +251,7 @@ export default function TableDetailPage() {
       });
       loadData();
     } catch (e) {
-      console.error("Chyba při přidání dalšího kusu:", e);
+      console.error("Chyba při přidání kusu:", e);
     }
   };
 
@@ -267,7 +285,7 @@ export default function TableDetailPage() {
     }
   };
 
-  // Uložení poznámky k jídlu
+  // Uložení poznámky
   const handleSaveNote = async () => {
     if (!noteItem) return;
     try {
@@ -403,7 +421,7 @@ export default function TableDetailPage() {
 
           {/* Seznam položek účtu */}
           <div className="flex-1 overflow-y-auto p-2 space-y-3">
-            {/* 1. SEKCIE: PRÁVĚ SE PŘIPRAVUJE (SESKUPENÉ ŽLUTÉ POLOŽKY) */}
+            {/* 1. SEKCIE: PRÁVĚ SE PŘIPRAVUJE (ŽLUTÉ POLOŽKY) */}
             {groupedPendingItems.length > 0 && (
               <div className="bg-amber-50/80 border border-amber-300 rounded-2xl p-2.5 space-y-2">
                 <div className="flex items-center justify-between px-1">
@@ -414,7 +432,7 @@ export default function TableDetailPage() {
                     </span>
                   </div>
 
-                  {groupedPendingItems.length > 1 && (
+                  {groupedPendingItems.reduce((acc, g) => acc + g.totalQty, 0) > 1 && (
                     <button
                       type="button"
                       onClick={handleServeAllPending}
@@ -431,7 +449,7 @@ export default function TableDetailPage() {
                     return (
                       <div
                         key={`${sampleItem.productId}_${sampleItem.note || ""}`}
-                        onClick={() => handleServeGroup(itemIds)}
+                        onClick={() => handleServeSingleItem(itemIds)}
                         className="p-2.5 rounded-xl bg-amber-100/90 border border-amber-300 hover:bg-amber-200/90 transition cursor-pointer flex items-center justify-between shadow-2xs active:scale-[0.99]"
                       >
                         <div className="flex-1 pr-2">
@@ -444,7 +462,7 @@ export default function TableDetailPage() {
                             </span>
                           </div>
                           <span className="text-[11px] font-bold text-amber-900 block mt-0.5">
-                            {sampleItem.unitPrice * totalQty} Kč ({sampleItem.unitPrice} Kč/ks) • Klikni pro vydání
+                            {sampleItem.unitPrice} Kč / ks • Ťukni pro výdej 1 ks
                           </span>
                           {sampleItem.note && (
                             <span className="text-[10px] font-semibold text-amber-950 bg-amber-200/80 px-1.5 py-0.5 rounded mt-1 inline-block">
@@ -454,19 +472,32 @@ export default function TableDetailPage() {
                         </div>
 
                         <div className="flex items-center gap-1.5">
-                          {/* Tlačítko -1 ks pro ubrání ze žluté skupiny */}
+                          {/* Tlačítko -1 ks */}
                           <button
                             type="button"
                             onClick={(e) => handleDecreasePendingGroup(e, itemIds)}
                             className="w-7 h-7 rounded-lg bg-white border border-amber-300 hover:bg-red-100 hover:text-red-700 text-slate-800 font-black text-sm flex items-center justify-center transition cursor-pointer"
-                            title="Odebrat 1 ks"
+                            title="Odebrat 1 ks z přípravy"
                           >
                             −
                           </button>
 
-                          <span className="bg-amber-500 text-slate-950 font-black px-2.5 py-1 rounded-lg text-xs shadow-2xs whitespace-nowrap">
-                            Vydat {totalQty > 1 ? `(${totalQty})` : ""}
+                          {/* Tlačítko Vydat 1 ks */}
+                          <span className="bg-amber-500 text-slate-950 font-black px-2 py-1 rounded-lg text-xs shadow-2xs">
+                            +1 vydat
                           </span>
+
+                          {/* Tlačítko Vydat vše pro tuto konkrétní skupinu */}
+                          {totalQty > 1 && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleServeGroupAll(e, itemIds)}
+                              className="bg-amber-600 hover:bg-amber-700 text-white font-black px-2 py-1 rounded-lg text-xs shadow-2xs transition cursor-pointer"
+                              title="Vydat všechny kusy tohoto druhu"
+                            >
+                              Vše ({totalQty})
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
