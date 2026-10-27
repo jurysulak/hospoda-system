@@ -5,10 +5,16 @@ export const dynamic = "force-dynamic";
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { itemId: string } }
+  { params }: { params: Promise<{ itemId: string }> }
 ) {
   try {
-    const itemId = parseInt(params.itemId, 10);
+    const resolvedParams = await params;
+    const itemId = parseInt(resolvedParams.itemId, 10);
+
+    if (isNaN(itemId)) {
+      return NextResponse.json({ error: "Neplatné ID položky" }, { status: 400 });
+    }
+
     const body = await request.json();
     const { status } = body;
 
@@ -19,6 +25,7 @@ export async function PATCH(
 
     return NextResponse.json(updated);
   } catch (error: any) {
+    console.error("Chyba při změně stavu položky:", error);
     return NextResponse.json({ error: error?.message }, { status: 500 });
   }
 }
