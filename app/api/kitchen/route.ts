@@ -3,22 +3,46 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+// Seznam zakázaných slov pro kuchyň (jak v kategorii, tak v názvu)
+const DRINK_KEYWORDS = [
+  "pivo",
+  "radegast",
+  "kozel",
+  "plzeň",
+  "pilsner",
+  "nealko",
+  "alko",
+  "alkohol",
+  "rum",
+  "vodka",
+  "fernet",
+  "slivovice",
+  "víno",
+  "vino",
+  "káva",
+  "kava",
+  "čaj",
+  "caj",
+  "espresso",
+  "limo",
+  "kofola",
+  "cola",
+  "fanta",
+  "sprite",
+  "tonic",
+  "džus",
+  "voda",
+  "mattoni",
+  "birell",
+  "panák",
+  "panak",
+  "drinky",
+  "teplé nápoje",
+];
+
 export async function GET() {
   try {
-    // 1. Zjistíme ID všech produktů, které NEPATŘÍ do kuchyně (nápoje, pivo, alkohol)
-    // Případně vyfiltrujeme jen kategorie "Jídlo", "Kuchyně", "Menu" apod.
-    const kitchenProducts = await prisma.product.findMany({
-      where: {
-        category: {
-          notIn: ["Pivo", "Alkohol", "Nealko", "Víno", "Káva", "Teplé nápoje"],
-        },
-      },
-      select: { id: true },
-    });
-
-    const kitchenProductIds = kitchenProducts.map((p) => p.id);
-
-    // 2. Načteme otevřené objednávky pouze s položkami do kuchyně
+    // Načteme všechny otevřené objednávky včetně produktů
     const openOrders = await prisma.order.findMany({
       where: {
         status: "open",
@@ -26,8 +50,8 @@ export async function GET() {
       include: {
         table: true,
         items: {
-          where: {
-            productId: { in: kitchenProductIds },
+          include: {
+            product: true,
           },
           orderBy: { id: "asc" },
         },
@@ -37,22 +61,36 @@ export async function GET() {
       },
     });
 
-    // 3. Převedeme na formát pro kuchyňské bony (zobrazíme jen stoly, co mají jídlo)
+    // Filtrujeme pouze čistě jídla
     const kitchenTickets = openOrders
-      .filter((order) => order.items.length > 0)
-      .map((order) => ({
-        orderId: order.id,
-        tableName: order.table?.name ?? `Stůl ${order.tableId}`,
-        section: order.table?.section ?? "Vnitřek",
-        createdAt: order.createdAt,
-        items: order.items.map((item) => ({
-          id: item.id,
-          name: item.productName,
-          quantity: item.quantity,
-          status: item.status || "PENDING",
-          note: item.note || null,
-        })),
-      }));
+      .map((order) => {
+        const foodItems = order.items.filter((item) => {
+          const cat = (item.product?.category || "").toLowerCase().trim();
+          const name = (item.productName || item.product?.name || "").toLowerCase().trim();
+
+          // Pokud název nebo kategorie obsahuje cokoliv z nápojů, vyřadíme to
+          const isDrink = DRINK_KEYWORDS.some(
+            (kw) => cat.includes(kw) || name.includes(kw)
+          );
+
+          return !isDrink;
+        });
+
+        return {
+          orderId: order.id,
+          tableName: order.table?.name ?? `Stůl ${order.tableId}`,
+          section: order.table?.section ?? "Vnitřek",
+          createdAt: order.createdAt,
+          items: foodItems.map((item) => ({
+            id: item.id,
+            name: item.productName,
+            quantity: item.quantity,
+            status: item.status || "PENDING",
+            note: item.note || null,
+          })),
+        };
+      })
+      .filter((ticket) => ticket.items.length > 0); // Zobrazíme jen stoly, co mají reálné jídlo
 
     return NextResponse.json(kitchenTickets, { status: 200 });
   } catch (error: any) {

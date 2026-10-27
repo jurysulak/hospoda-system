@@ -1,28 +1,46 @@
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(req: NextRequest) {
-  const body = await req.json();
+export const dynamic = "force-dynamic";
 
-  const name = body.name?.trim();
-  const category = body.category?.trim();
-  const price = Number(body.price);
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { name, category, price, vatRate } = body;
 
-  if (!name || !category || !price || price <= 0) {
+    if (!name || name.trim() === "") {
+      return NextResponse.json(
+        { error: "Název produktu je povinný" },
+        { status: 400 }
+      );
+    }
+
+    const numericPrice = Math.round(Number(price));
+    if (isNaN(numericPrice) || numericPrice < 0) {
+      return NextResponse.json(
+        { error: "Neplatná cena produktu" },
+        { status: 400 }
+      );
+    }
+
+    const numericVatRate = vatRate ? Number(vatRate) : (category === "Jídlo" ? 12 : 21);
+
+    const product = await prisma.product.create({
+      data: {
+        name: name.trim(),
+        category: category?.trim() || "Ostatní",
+        price: numericPrice,
+        vatRate: isNaN(numericVatRate) ? 21 : numericVatRate,
+        isActive: true,
+      },
+    });
+
+    return NextResponse.json(product, { status: 201 });
+  } catch (error: any) {
+    console.error("Chyba při vytváření produktu:", error);
     return NextResponse.json(
-      { error: "Neplatná data produktu" },
-      { status: 400 }
+      { error: "Nepodařilo se vytvořit produkt", details: error?.message },
+      { status: 500 }
     );
   }
-
-  const product = await prisma.product.create({
-    data: {
-      name,
-      category,
-      price,
-      isActive: true,
-    },
-  });
-
-  return NextResponse.json(product);
 }
