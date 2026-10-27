@@ -80,7 +80,7 @@ export default function TableDetailPage() {
       if (tableRes.ok) setTable(await tableRes.json());
       if (prodRes.ok) setProducts(await prodRes.json());
     } catch (e) {
-      console.error("Chyba při načítání:", e);
+      console.error("Chyba při načítání dat:", e);
     }
   };
 
@@ -91,7 +91,7 @@ export default function TableDetailPage() {
   const currentOrder = table?.orders?.[0] || null;
   const rawItems = currentOrder?.items || [];
 
-  // 1. Rozdělení položek na ty, co se právě PŘIPRAVUJÍ (PENDING), a na ty VYDANÉ (SERVED)
+  // Rozdělení položek na přípravu (PENDING) a vydané (SERVED)
   const pendingItems = useMemo(() => {
     return rawItems.filter((i) => i.status === "PENDING");
   }, [rawItems]);
@@ -100,7 +100,7 @@ export default function TableDetailPage() {
     return rawItems.filter((i) => i.status !== "PENDING");
   }, [rawItems]);
 
-  // Seřazení kategorií dle frekvence používání
+  // Seřazení kategorií dle četnosti
   const sortedCategories = useMemo(() => {
     const unique = Array.from(new Set(products.map((p) => p.category.trim())));
     return [
@@ -127,7 +127,7 @@ export default function TableDetailPage() {
     });
   }, [products, activeCategory]);
 
-  // Přidat položku na stůl z nabídky (vždy jako PENDING žlutá)
+  // Přidání produktu z nabídky (vždy jako PENDING)
   const handleAddProduct = async (product: Product) => {
     try {
       await fetch(`/api/tables/${tableId}/items`, {
@@ -137,11 +137,11 @@ export default function TableDetailPage() {
       });
       loadData();
     } catch (e) {
-      console.error(e);
+      console.error("Chyba při přidávání položky:", e);
     }
   };
 
-  // Potvrzení výdeje jedné žluté položky
+  // Vydání jedné žluté položky
   const handleServeItem = async (itemId: number) => {
     try {
       await fetch(`/api/order-items/${itemId}/status`, {
@@ -151,29 +151,27 @@ export default function TableDetailPage() {
       });
       loadData();
     } catch (e) {
-      console.error(e);
+      console.error("Chyba při výdeji:", e);
     }
   };
 
-  // Hromadné vydání všech připravovaných věcí najednou (např. neseš celé plato piv)
+  // Hromadné postupné vydání všech položek v přípravě (pro správné sloučení)
   const handleServeAllPending = async () => {
     try {
-      await Promise.all(
-        pendingItems.map((item) =>
-          fetch(`/api/order-items/${item.id}/status`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: "SERVED" }),
-          })
-        )
-      );
+      for (const item of pendingItems) {
+        await fetch(`/api/order-items/${item.id}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "SERVED" }),
+        });
+      }
       loadData();
     } catch (e) {
-      console.error(e);
+      console.error("Chyba při hromadném výdeji:", e);
     }
   };
 
-  // Kliknutí na již vydanou položku na účtu (přičte další kus, který opět naskočí žlutě)
+  // Kliknutí na již vydanou položku (přidá další 1 ks do přípravy)
   const handleServedItemClick = async (item: OrderItem) => {
     if (splitMode) {
       const selected = splitSelected[item.id] || 0;
@@ -184,7 +182,6 @@ export default function TableDetailPage() {
       return;
     }
 
-    // Kliknutí na vydanou položku přidá další 1 ks (do přípravy)
     try {
       await fetch(`/api/tables/${tableId}/items`, {
         method: "POST",
@@ -196,7 +193,7 @@ export default function TableDetailPage() {
       });
       loadData();
     } catch (e) {
-      console.error(e);
+      console.error("Chyba při přidání dalšího kusu:", e);
     }
   };
 
@@ -211,11 +208,11 @@ export default function TableDetailPage() {
       });
       loadData();
     } catch (e) {
-      console.error(e);
+      console.error("Chyba při odebírání:", e);
     }
   };
 
-  // Vymazání celého účtu stolu
+  // Vymazání celého stolu
   const handleClearWholeTable = async () => {
     if (rawItems.length === 0) return;
     if (!window.confirm("Opravdu smazat všechny položky z tohoto stolu?")) return;
@@ -230,7 +227,7 @@ export default function TableDetailPage() {
     }
   };
 
-  // Uložení poznámky k jídlu
+  // Uložení poznámky
   const handleSaveNote = async () => {
     if (!noteItem) return;
     try {
@@ -242,11 +239,11 @@ export default function TableDetailPage() {
       setNoteItem(null);
       loadData();
     } catch (e) {
-      console.error(e);
+      console.error("Chyba při ukládání poznámky:", e);
     }
   };
 
-  // Výpočty částek (počítáme ze všech položek na stole)
+  // Součty
   const totalAccountSum = useMemo(() => {
     return rawItems.reduce((acc, i) => acc + i.unitPrice * i.quantity, 0);
   }, [rawItems]);
@@ -260,7 +257,7 @@ export default function TableDetailPage() {
 
   const currentPayAmount = splitMode ? splitSum : totalAccountSum;
 
-  // Provedení platby
+  // Platba
   const handleConfirmPayment = async (method: "CASH" | "CARD") => {
     if (currentPayAmount <= 0) return;
     setIsPaying(true);
@@ -292,7 +289,7 @@ export default function TableDetailPage() {
         }
       }
     } catch (e) {
-      console.error(e);
+      console.error("Chyba při platbě:", e);
     } finally {
       setIsPaying(false);
     }
@@ -300,7 +297,7 @@ export default function TableDetailPage() {
 
   return (
     <main className="h-screen w-screen overflow-hidden bg-slate-950 flex flex-col select-none">
-      {/* Hlavní horní lišta */}
+      {/* Horní lišta */}
       <header className="h-14 bg-slate-900 border-b border-slate-800 px-4 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <Link
@@ -324,13 +321,11 @@ export default function TableDetailPage() {
         </div>
       </header>
 
-      {/* Dvousloupcové rozvržení (100% výšky displeje) */}
+      {/* Dvousloupcový layout */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-        
         {/* LEVÝ PANEL: ÚČET STOLU */}
         <section className="w-full md:w-5/12 lg:w-[380px] xl:w-[420px] bg-white border-r border-slate-200 flex flex-col justify-between h-[48vh] md:h-full shrink-0">
-          
-          {/* Horní lišta účtu */}
+          {/* Lišta nad účtem */}
           <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
             <span className="text-xs font-black text-slate-600 uppercase tracking-wider">
               {splitMode ? "Výběr k úhradě" : "Účet stolu"}
@@ -366,9 +361,8 @@ export default function TableDetailPage() {
             </div>
           </div>
 
-          {/* Scrollovatelný obsah účtu */}
+          {/* Seznam položek účtu */}
           <div className="flex-1 overflow-y-auto p-2 space-y-3">
-            
             {/* 1. SEKCIE: PRÁVĚ SE PŘIPRAVUJE (ŽLUTÉ POLOŽKY) */}
             {pendingItems.length > 0 && (
               <div className="bg-amber-50/80 border border-amber-300 rounded-2xl p-2.5 space-y-2">
@@ -391,7 +385,6 @@ export default function TableDetailPage() {
                   )}
                 </div>
 
-                {/* Seznam položek v přípravě */}
                 <div className="space-y-1.5">
                   {pendingItems.map((item) => (
                     <div
@@ -428,7 +421,7 @@ export default function TableDetailPage() {
               </div>
             )}
 
-            {/* 2. SEKCIE: JIŽ VYDANÉ POLOŽKY NA ÚČTU */}
+            {/* 2. SEKCIE: VYDANÉ POLOŽKY (SLOUČENÉ DO JEDNOHO ÚČTU) */}
             <div className="space-y-1.5">
               {servedItems.length === 0 && pendingItems.length === 0 ? (
                 <div className="h-40 flex items-center justify-center text-slate-400 text-xs font-bold">
@@ -458,7 +451,6 @@ export default function TableDetailPage() {
                         </div>
 
                         <div className="flex items-center gap-1.5">
-                          {/* Tlačítko -1 ks */}
                           {!splitMode && (
                             <button
                               type="button"
@@ -470,7 +462,6 @@ export default function TableDetailPage() {
                             </button>
                           )}
 
-                          {/* Počet kusů */}
                           {splitMode ? (
                             <span className="bg-amber-500 text-slate-950 font-black px-2 py-0.5 rounded-lg text-xs">
                               {selectedQty} / {item.quantity} ks
@@ -481,7 +472,6 @@ export default function TableDetailPage() {
                             </span>
                           )}
 
-                          {/* Poznámka pro kuchyň */}
                           {!splitMode && (
                             <button
                               type="button"
@@ -519,7 +509,7 @@ export default function TableDetailPage() {
             </div>
           </div>
 
-          {/* SPODNÍ ČÁST ÚČTU: Trvale na očích bez ohledu na velikost nabídky */}
+          {/* SPODNÍ ČÁST ÚČTU */}
           <div className="p-3 bg-white border-t border-slate-200 space-y-2 shrink-0 shadow-xs">
             <div className="flex justify-between items-baseline px-1">
               <span className="text-xs font-black text-slate-500 uppercase tracking-wider">
@@ -542,7 +532,6 @@ export default function TableDetailPage() {
 
         {/* PRAVÝ PANEL: NABÍDKA PRODUKTŮ */}
         <section className="flex-1 bg-slate-100 flex flex-col overflow-hidden h-[52vh] md:h-full">
-          {/* Kategorie vodorovně */}
           <div className="bg-white border-b border-slate-200 p-2 overflow-x-auto flex gap-1.5 shrink-0 no-scrollbar">
             {sortedCategories.map((cat) => (
               <button
@@ -560,7 +549,6 @@ export default function TableDetailPage() {
             ))}
           </div>
 
-          {/* Mřížka položek */}
           <div className="flex-1 overflow-y-auto p-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 content-start">
             {displayedProducts.map((p) => (
               <button
@@ -581,7 +569,7 @@ export default function TableDetailPage() {
         </section>
       </div>
 
-      {/* MODÁL PRO PLATBU (HOTOVOST / KARTA) */}
+      {/* MODÁL PRO PLATBU */}
       {isPayModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 text-center animate-in fade-in zoom-in-95 duration-100">
