@@ -37,16 +37,17 @@ model Table {
 // -------------------------------------------------------------
 
 model Product {
-  id          Int             @id @default(autoincrement())
-  name        String
-  category    String          // např. "Pivo", "Nealko", "Jídlo"
-  price       Int             // cena v celých jednotkách (např. CZK)
-  isActive    Boolean         @default(true)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id        Int      @id @default(autoincrement())
+  name      String
+  category  String
+  price     Int
+  vatRate   Int      @default(21) // <-- zkontroluj tento řádek
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   orderItems  OrderItem[]
-  recipeItems ProductRecipe[] // Receptura: z jakých surovin se skládá
+  recipeItems ProductRecipe[]
 }
 
 // -------------------------------------------------------------
