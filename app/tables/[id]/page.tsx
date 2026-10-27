@@ -238,11 +238,11 @@ export default function TableDetailPage() {
     try {
       const payload = splitMode
         ? {
-            paymentMethod: method,
-            splitItems: Object.entries(splitSelected)
-              .filter(([_, qty]) => qty > 0)
-              .map(([id, qty]) => ({ itemId: Number(id), quantity: qty })),
-          }
+          paymentMethod: method,
+          splitItems: Object.entries(splitSelected)
+            .filter(([_, qty]) => qty > 0)
+            .map(([id, qty]) => ({ itemId: Number(id), quantity: qty })),
+        }
         : { paymentMethod: method };
 
       const res = await fetch(`/api/tables/${tableId}/pay`, {
@@ -296,10 +296,10 @@ export default function TableDetailPage() {
 
       {/* Dvousloupcové tělo aplikace – přesně na celou zbývající výšku bez scrollování stránky */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-        
+
         {/* LEVÝ PANEL: ÚČET (Fixní šířka, vlastní scroll seznamu) */}
         <section className="w-full md:w-5/12 lg:w-[380px] xl:w-[420px] bg-white border-r border-slate-200 flex flex-col justify-between h-[48vh] md:h-full shrink-0">
-          
+
           {/* Horní lišta účtu s tlačítky Rozdělit a Smazat */}
           <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
             <span className="text-xs font-black text-slate-600 uppercase tracking-wider">
@@ -314,11 +314,10 @@ export default function TableDetailPage() {
                   setSplitMode(!splitMode);
                   setSplitSelected({});
                 }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  splitMode
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${splitMode
                     ? "bg-amber-500 text-slate-950 font-black shadow-xs"
                     : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
-                }`}
+                  }`}
               >
                 {splitMode ? "Zrušit dělení" : "Rozdělit účet"}
               </button>
@@ -351,11 +350,10 @@ export default function TableDetailPage() {
                   <div
                     key={item.id}
                     onClick={() => handleItemClick(item)}
-                    className={`p-2.5 rounded-xl border transition cursor-pointer active:scale-[0.99] flex flex-col gap-1 ${
-                      splitMode && selectedQty > 0
+                    className={`p-2.5 rounded-xl border transition cursor-pointer active:scale-[0.99] flex flex-col gap-1 ${splitMode && selectedQty > 0
                         ? "border-amber-400 bg-amber-50/70"
                         : "border-slate-200 bg-slate-50/60 hover:bg-slate-100/80"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1 pr-2">
@@ -391,19 +389,7 @@ export default function TableDetailPage() {
                           </span>
                         )}
 
-                        {/* Tlačítko smazat celou položku jedním klikem */}
-                        {!splitMode && (
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteItem(e, item)}
-                            className="w-7 h-7 rounded-lg bg-white border border-slate-200 hover:border-red-200 hover:bg-red-50 hover:text-red-600 text-slate-400 font-bold text-sm flex items-center justify-center transition cursor-pointer"
-                            title="Smazat celou položku"
-                          >
-                            ×
-                          </button>
-                        )}
-
-                        {/* Poznámka pro kuchyň */}
+                        {/* Tlačítko poznámky */}
                         {!splitMode && (
                           <button
                             type="button"
@@ -412,11 +398,10 @@ export default function TableDetailPage() {
                               setNoteItem(item);
                               setNoteText(item.note || "");
                             }}
-                            className={`px-1.5 h-7 rounded-lg text-[11px] font-bold border transition cursor-pointer flex items-center justify-center ${
-                              item.note
+                            className={`px-1.5 h-7 rounded-lg text-[11px] font-bold border transition cursor-pointer flex items-center justify-center ${item.note
                                 ? "bg-amber-500 border-amber-500 text-slate-950"
                                 : "bg-white border-slate-200 text-slate-500 hover:bg-slate-100"
-                            }`}
+                              }`}
                             title="Poznámka pro kuchyň"
                           >
                             Pozn.
@@ -470,11 +455,10 @@ export default function TableDetailPage() {
                 key={cat}
                 type="button"
                 onClick={() => setActiveCategory(cat)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-black whitespace-nowrap transition cursor-pointer ${
-                  activeCategory === cat
+                className={`px-3.5 py-2 rounded-xl text-xs font-black whitespace-nowrap transition cursor-pointer ${activeCategory === cat
                     ? "bg-slate-900 text-white shadow-xs"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
+                  }`}
               >
                 {cat}
               </button>
@@ -522,19 +506,21 @@ export default function TableDetailPage() {
               <button
                 disabled={isPaying}
                 onClick={() => handleConfirmPayment("CASH")}
-                className="py-4 px-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-base flex flex-col items-center gap-1 shadow-md transition cursor-pointer active:scale-95"
+                className="py-4 px-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-base flex flex-col items-center gap-1 shadow-md shadow-emerald-900/20 transition cursor-pointer disabled:opacity-50"
               >
-                <span className="text-xl font-bold">Hotovost</span>
-                <span className="text-[11px] text-slate-400 font-normal">Tisk paragonu</span>
+                <span className="text-3xl">💵</span>
+                <span className="text-lg font-black tracking-tight">Hotovost</span>
+                <span className="text-[11px] text-emerald-100 font-medium">Tisk účtenky</span>
               </button>
 
               <button
                 disabled={isPaying}
                 onClick={() => handleConfirmPayment("CARD")}
-                className="py-4 px-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-base flex flex-col items-center gap-1 shadow-md transition cursor-pointer active:scale-95"
+                className="py-4 px-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-black text-base flex flex-col items-center gap-1 shadow-md shadow-indigo-900/20 transition cursor-pointer disabled:opacity-50"
               >
-                <span className="text-xl font-bold">Karta</span>
-                <span className="text-[11px] text-slate-400 font-normal">Terminál</span>
+                <span className="text-3xl">💳</span>
+                <span className="text-lg font-black tracking-tight">Karta</span>
+                <span className="text-[11px] text-indigo-100 font-medium">Terminál</span>
               </button>
             </div>
 
