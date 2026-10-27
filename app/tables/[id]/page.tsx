@@ -91,7 +91,7 @@ export default function TableDetailPage() {
   const currentOrder = table?.orders?.[0] || null;
   const currentItems = currentOrder?.items || [];
 
-  // Seřazení kategorií
+  // Seřazení kategorií dle frekvence používání
   const sortedCategories = useMemo(() => {
     const unique = Array.from(new Set(products.map((p) => p.category.trim())));
     return [
@@ -118,7 +118,7 @@ export default function TableDetailPage() {
     });
   }, [products, activeCategory]);
 
-  // Přidat na stůl z nabídky
+  // Přidat na stůl z nabídky vpravo
   const handleAddProduct = async (product: Product) => {
     try {
       await fetch(`/api/tables/${tableId}/items`, {
@@ -132,7 +132,7 @@ export default function TableDetailPage() {
     }
   };
 
-  // Kliknutí na položku na účtu (+1 ks nebo označení k dělení)
+  // Kliknutí na položku na účtu
   const handleItemClick = async (item: OrderItem) => {
     if (splitMode) {
       const selected = splitSelected[item.id] || 0;
@@ -143,11 +143,30 @@ export default function TableDetailPage() {
       return;
     }
 
+    // Pokud je ve stavu přípravy (žlutá), kliknutím ji obsluha potvrdí jako vydanou
+    if (item.status === "PENDING") {
+      try {
+        await fetch(`/api/order-items/${item.id}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "SERVED" }),
+        });
+        loadData();
+      } catch (e) {
+        console.error(e);
+      }
+      return;
+    }
+
+    // Pokud už je vydaná, dalším kliknutím přidáme další kus (naskočí na přípravu)
     try {
       await fetch(`/api/tables/${tableId}/items`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: item.productId, quantity: 1 }),
+        body: JSON.stringify({
+          productId: item.productId,
+          quantity: 1,
+        }),
       });
       loadData();
     } catch (e) {
@@ -170,22 +189,7 @@ export default function TableDetailPage() {
     }
   };
 
-  // Smazání celé položky z účtu
-  const handleDeleteItem = async (e: React.MouseEvent, item: OrderItem) => {
-    e.stopPropagation();
-    try {
-      await fetch(`/api/order-items/${item.id}/remove`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quantity: item.quantity }),
-      });
-      loadData();
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  // Vymazání celého účtu stolu (koš vedle rozdělení účtu)
+  // Vymazání celého účtu stolu (tlačítko vedle rozdělení účtu)
   const handleClearWholeTable = async () => {
     if (currentItems.length === 0) return;
     if (!window.confirm("Opravdu smazat všechny položky z tohoto stolu?")) return;
@@ -238,11 +242,11 @@ export default function TableDetailPage() {
     try {
       const payload = splitMode
         ? {
-          paymentMethod: method,
-          splitItems: Object.entries(splitSelected)
-            .filter(([_, qty]) => qty > 0)
-            .map(([id, qty]) => ({ itemId: Number(id), quantity: qty })),
-        }
+            paymentMethod: method,
+            splitItems: Object.entries(splitSelected)
+              .filter(([_, qty]) => qty > 0)
+              .map(([id, qty]) => ({ itemId: Number(id), quantity: qty })),
+          }
         : { paymentMethod: method };
 
       const res = await fetch(`/api/tables/${tableId}/pay`, {
@@ -294,35 +298,34 @@ export default function TableDetailPage() {
         </div>
       </header>
 
-      {/* Dvousloupcové tělo aplikace – přesně na celou zbývající výšku bez scrollování stránky */}
+      {/* Dvousloupcové tělo aplikace – 100% výšky bez vnějšího scrollování */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-
-        {/* LEVÝ PANEL: ÚČET (Fixní šířka, vlastní scroll seznamu) */}
+        
+        {/* LEVÝ PANEL: ÚČET STOLU */}
         <section className="w-full md:w-5/12 lg:w-[380px] xl:w-[420px] bg-white border-r border-slate-200 flex flex-col justify-between h-[48vh] md:h-full shrink-0">
-
-          {/* Horní lišta účtu s tlačítky Rozdělit a Smazat */}
+          
+          {/* Horní lišta účtu s tlačítky Rozdělit a Smazat stůl */}
           <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
             <span className="text-xs font-black text-slate-600 uppercase tracking-wider">
               {splitMode ? "Výběr k úhradě" : "Účet stolu"}
             </span>
 
             <div className="flex items-center gap-1.5">
-              {/* Tlačítko Rozdělit účet */}
               <button
                 type="button"
                 onClick={() => {
                   setSplitMode(!splitMode);
                   setSplitSelected({});
                 }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${splitMode
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  splitMode
                     ? "bg-amber-500 text-slate-950 font-black shadow-xs"
                     : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
-                  }`}
+                }`}
               >
                 {splitMode ? "Zrušit dělení" : "Rozdělit účet"}
               </button>
 
-              {/* Tlačítko Smazat celý účet (koš vedle rozdělení) */}
               {!splitMode && (
                 <button
                   type="button"
@@ -346,22 +349,34 @@ export default function TableDetailPage() {
             ) : (
               currentItems.map((item) => {
                 const selectedQty = splitSelected[item.id] || 0;
+                const isPending = item.status === "PENDING";
+
                 return (
                   <div
                     key={item.id}
                     onClick={() => handleItemClick(item)}
-                    className={`p-2.5 rounded-xl border transition cursor-pointer active:scale-[0.99] flex flex-col gap-1 ${splitMode && selectedQty > 0
+                    className={`p-2.5 rounded-xl border transition cursor-pointer active:scale-[0.99] flex flex-col gap-1 ${
+                      splitMode && selectedQty > 0
                         ? "border-amber-400 bg-amber-50/70"
+                        : isPending
+                        ? "border-amber-400 bg-amber-50 shadow-xs"
                         : "border-slate-200 bg-slate-50/60 hover:bg-slate-100/80"
-                      }`}
+                    }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1 pr-2">
-                        <span className="font-bold text-sm text-slate-900 block leading-tight">
-                          {item.productName}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-sm text-slate-900 block leading-tight">
+                            {item.productName}
+                          </span>
+                          {isPending && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-amber-200 text-amber-900 animate-pulse">
+                              Příprava
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[11px] font-semibold text-slate-400">
-                          {item.unitPrice} Kč / ks
+                          {item.unitPrice} Kč / ks {isPending && "• Klikni pro vydání"}
                         </span>
                       </div>
 
@@ -384,7 +399,13 @@ export default function TableDetailPage() {
                             {selectedQty} / {item.quantity} ks
                           </span>
                         ) : (
-                          <span className="bg-slate-900 text-white font-black px-2.5 py-1 rounded-lg text-xs min-w-[28px] text-center">
+                          <span
+                            className={`font-black px-2.5 py-1 rounded-lg text-xs min-w-[28px] text-center ${
+                              isPending
+                                ? "bg-amber-500 text-slate-950"
+                                : "bg-slate-900 text-white"
+                            }`}
+                          >
                             {item.quantity}×
                           </span>
                         )}
@@ -398,10 +419,11 @@ export default function TableDetailPage() {
                               setNoteItem(item);
                               setNoteText(item.note || "");
                             }}
-                            className={`px-1.5 h-7 rounded-lg text-[11px] font-bold border transition cursor-pointer flex items-center justify-center ${item.note
+                            className={`px-1.5 h-7 rounded-lg text-[11px] font-bold border transition cursor-pointer flex items-center justify-center ${
+                              item.note
                                 ? "bg-amber-500 border-amber-500 text-slate-950"
                                 : "bg-white border-slate-200 text-slate-500 hover:bg-slate-100"
-                              }`}
+                            }`}
                             title="Poznámka pro kuchyň"
                           >
                             Pozn.
@@ -425,7 +447,7 @@ export default function TableDetailPage() {
             )}
           </div>
 
-          {/* SPODNÍ ČÁST ÚČTU: Trvale na očích bez ohledu na velikost nabídky */}
+          {/* SPODNÍ ČÁST ÚČTU: Trvalé ukotvení dole */}
           <div className="p-3 bg-white border-t border-slate-200 space-y-2 shrink-0 shadow-xs">
             <div className="flex justify-between items-baseline px-1">
               <span className="text-xs font-black text-slate-500 uppercase tracking-wider">
@@ -455,17 +477,18 @@ export default function TableDetailPage() {
                 key={cat}
                 type="button"
                 onClick={() => setActiveCategory(cat)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-black whitespace-nowrap transition cursor-pointer ${activeCategory === cat
+                className={`px-3.5 py-2 rounded-xl text-xs font-black whitespace-nowrap transition cursor-pointer ${
+                  activeCategory === cat
                     ? "bg-slate-900 text-white shadow-xs"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }`}
+                }`}
               >
                 {cat}
               </button>
             ))}
           </div>
 
-          {/* Mřížka položek – samostatně se posouvá, nikdy neodtlačí spodek účtu */}
+          {/* Mřížka položek – scrollovatelná s rychlým přidáním */}
           <div className="flex-1 overflow-y-auto p-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 content-start">
             {displayedProducts.map((p) => (
               <button
@@ -486,7 +509,7 @@ export default function TableDetailPage() {
         </section>
       </div>
 
-      {/* MODÁL PRO PLATBU */}
+      {/* MODÁL PRO PLATBU (BAREVNÁ TLAČÍTKA S EMOTIKONY) */}
       {isPayModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 text-center animate-in fade-in zoom-in-95 duration-100">
