@@ -300,6 +300,13 @@ export default function KitchenPage() {
             🔔 {audioUnlocked ? "Zvuk aktivní (Otestovat)" : "Zapnout zvuk"}
           </button>
 
+          <Link
+  href="/kitchen/history"
+  className="rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-2 text-xs font-bold transition flex items-center gap-1.5"
+>
+  📅 Záznamy jídel
+</Link>
+
           <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs font-bold">
             <button
               onClick={() => setShowCompleted(false)}
