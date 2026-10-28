@@ -1,140 +1,87 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import Link from "next/link";
-
-interface Table {
-  id: number;
-  name: string;
-  section: string;
-  orders: {
-    id: number;
-    items: {
-      id: number;
-      quantity: number;
-      unitPrice: number;
-    }[];
-  }[];
-}
-
-export default function HomePage() {
-  const [tables, setTables] = useState<Table[]>([]);
-
-  useEffect(() => {
-    const loadTables = async () => {
-      try {
-        const res = await fetch("/api/tables", { cache: "no-store" });
-        if (res.ok) {
-          const data: Table[] = await res.json();
-          setTables(data);
-        }
-      } catch (e) {
-        console.error("Chyba při načítání stolů:", e);
-      }
-    };
-
-    loadTables();
-  }, []);
-
-  // Vyhledání stolu Bar (případně fallback na ID 1)
-  const barTable = tables.find((t) => t.name.trim().toLowerCase() === "bar");
-  const barUrl = barTable ? `/tables/${barTable.id}` : "/tables/1";
-
-  // Zjištění, zda má bar otevřený účet s položkami
-  const barItemsCount =
-    barTable?.orders?.[0]?.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
-
+export default function Home() {
   return (
-    <main className="min-h-screen bg-slate-950 text-white p-4 sm:p-6 flex flex-col justify-between select-none">
-      <div className="max-w-5xl mx-auto w-full space-y-6">
-        
-        {/* Horní hlavička */}
-        <header className="flex flex-wrap items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-4 rounded-3xl shadow-md">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-              🍻 Hospoda U Šuláků
-            </h1>
-            <p className="text-xs text-slate-400 font-semibold mt-0.5">
-              Pokladní systém & Plánek stolů
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Tlačítko BAR na kraji v liště */}
-            <Link
-              href={barUrl}
-              className={`px-3.5 py-2 rounded-xl font-black text-xs transition cursor-pointer flex items-center gap-1.5 shadow-xs ${
-                barItemsCount > 0
-                  ? "bg-amber-500 hover:bg-amber-400 text-slate-950"
-                  : "bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/30"
-              }`}
-              title="Přejít na stůl Bar"
-            >
-              🍺 Bar {barItemsCount > 0 && `(${barItemsCount})`}
-            </Link>
-
-            <Link
-              href="/kitchen"
-              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-black text-xs transition cursor-pointer shadow-xs flex items-center gap-1.5"
-            >
-              👨‍🍳 Kuchyně
-            </Link>
-
-            <Link
-              href="/summary"
-              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-black text-xs transition cursor-pointer shadow-xs flex items-center gap-1.5"
-            >
-              📊 Tržby
-            </Link>
-          </div>
-        </header>
-
-        {/* Původní čisté rozdělení na místnosti */}
-        <div>
-          <h2 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-3 px-1">
-            Plánky místností
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Link
-              href="/section/vnitrek"
-              className="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-850 transition cursor-pointer flex flex-col justify-between h-36 active:scale-98"
-            >
-              <div className="text-3xl">🏠</div>
-              <div>
-                <span className="text-lg font-black text-white block">Vnitřek</span>
-                <span className="text-xs text-slate-400 font-medium">Hlavní sál a boxy</span>
-              </div>
-            </Link>
-
-            <Link
-              href="/section/zahradka"
-              className="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-850 transition cursor-pointer flex flex-col justify-between h-36 active:scale-98"
-            >
-              <div className="text-3xl">🌳</div>
-              <div>
-                <span className="text-lg font-black text-white block">Zahrádka</span>
-                <span className="text-xs text-slate-400 font-medium">Venkovní posezení</span>
-              </div>
-            </Link>
-
-            <Link
-              href="/section/salonek"
-              className="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-850 transition cursor-pointer flex flex-col justify-between h-36 active:scale-98"
-            >
-              <div className="text-3xl">🛋️</div>
-              <div>
-                <span className="text-lg font-black text-white block">Salónek</span>
-                <span className="text-xs text-slate-400 font-medium">Uzavřená společnost</span>
-              </div>
-            </Link>
-          </div>
+    <main className="min-h-screen bg-slate-200 p-4 md:p-6 select-none">
+      <div className="mx-auto flex min-h-[85vh] max-w-5xl flex-col justify-center space-y-8">
+        {/* Hlavička */}
+        <div className="rounded-3xl bg-white p-8 text-center shadow-sm">
+          <h1 className="text-5xl font-bold tracking-tight">Hospoda systém</h1>
+          <p className="mt-3 text-xl text-slate-600">Vyber sekci nebo stůl</p>
         </div>
 
-      </div>
+        {/* Hlavní sekce místností + samostatný BAR */}
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <a
+            href="/tables/1"
+            className="flex min-h-[200px] flex-col items-center justify-center rounded-3xl border-2 border-amber-400 bg-amber-100 p-6 text-center shadow-sm transition active:scale-[0.99] hover:bg-amber-200/70"
+          >
+            <span className="text-4xl mb-2">🍺</span>
+            <span className="text-3xl font-bold text-amber-950">BAR</span>
+            <span className="text-xs font-semibold text-amber-800 mt-1">Rychlý prodej</span>
+          </a>
 
-      <footer className="max-w-5xl mx-auto w-full text-center text-xs text-slate-600 font-semibold py-4 border-t border-slate-900 mt-6">
-        Hospoda U Šuláků POS • Opava
-      </footer>
+          <a
+            href="/section/vnitrek"
+            className="flex min-h-[200px] flex-col items-center justify-center rounded-3xl border-2 border-blue-300 bg-blue-100 p-6 text-center shadow-sm transition active:scale-[0.99] hover:bg-blue-200/70"
+          >
+            <span className="text-4xl mb-2">🏠</span>
+            <span className="text-3xl font-bold text-blue-950">Vnitřek</span>
+          </a>
+
+          <a
+            href="/section/zahradka"
+            className="flex min-h-[200px] flex-col items-center justify-center rounded-3xl border-2 border-green-300 bg-green-100 p-6 text-center shadow-sm transition active:scale-[0.99] hover:bg-green-200/70"
+          >
+            <span className="text-4xl mb-2">🌳</span>
+            <span className="text-3xl font-bold text-green-950">Zahrádka</span>
+          </a>
+
+          <a
+            href="/section/salonek"
+            className="flex min-h-[200px] flex-col items-center justify-center rounded-3xl border-2 border-purple-300 bg-purple-100 p-6 text-center shadow-sm transition active:scale-[0.99] hover:bg-purple-200/70"
+          >
+            <span className="text-4xl mb-2">🛋️</span>
+            <span className="text-3xl font-bold text-purple-950">Salónek</span>
+          </a>
+        </div>
+
+        {/* Spodní panel rychlých odkazů */}
+        <div className="flex flex-wrap justify-center gap-3">
+          <a
+            href="/kitchen"
+            className="rounded-2xl bg-amber-600 hover:bg-amber-700 px-5 py-4 text-lg font-semibold text-white shadow-sm transition active:scale-95"
+          >
+            👨‍🍳 Kuchyně (KDS)
+          </a>
+
+          <a
+            href="/payments"
+            className="rounded-2xl bg-slate-900 hover:bg-slate-800 px-5 py-4 text-lg font-semibold text-white shadow-sm transition active:scale-95"
+          >
+            Historie plateb
+          </a>
+
+          <a
+            href="/summary"
+            className="rounded-2xl bg-green-600 hover:bg-green-700 px-5 py-4 text-lg font-semibold text-white shadow-sm transition active:scale-95"
+          >
+            Denní souhrn
+          </a>
+
+          <a
+            href="/products"
+            className="rounded-2xl bg-blue-600 hover:bg-blue-700 px-5 py-4 text-lg font-semibold text-white shadow-sm transition active:scale-95"
+          >
+            Správa produktů
+          </a>
+
+          <a
+            href="/stock"
+            className="rounded-2xl bg-amber-700 hover:bg-amber-800 px-5 py-4 text-lg font-semibold text-white shadow-sm transition active:scale-95"
+          >
+            Sklad
+          </a>
+        </div>
+      </div>
     </main>
   );
 }
