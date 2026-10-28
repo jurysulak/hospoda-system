@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 
 type KitchenItem = {
@@ -30,8 +30,8 @@ export default function KitchenPage() {
   const prevPendingItemIdsRef = useRef<Set<number>>(new Set());
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  // Inicializace a odemčení AudioContextu prvním dotykem
-  const unlockAudio = () => {
+  // Inicializace a odemčení AudioContextu dotykem
+  const unlockAudio = useCallback(() => {
     try {
       if (!audioCtxRef.current) {
         const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -44,12 +44,12 @@ export default function KitchenPage() {
       }
       setAudioUnlocked(true);
     } catch (e) {
-      console.warn("Audio unlock failed:", e);
+      console.warn("AudioContext error:", e);
     }
-  };
+  }, []);
 
   // Hlasitý hotelový gong (Ding-Dong)
-  const playKitchenBell = () => {
+  const playKitchenBell = useCallback(() => {
     try {
       unlockAudio();
       const ctx = audioCtxRef.current;
@@ -81,11 +81,12 @@ export default function KitchenPage() {
       osc2.start(t + 0.28);
       osc2.stop(t + 1.8);
     } catch (e) {
-      console.warn("Audio error:", e);
+      console.warn("Chyba při přehrání gongu:", e);
     }
-  };
+  }, [unlockAudio]);
 
-  const fetchTickets = async () => {
+  // Pravidelné načítání ticketů (polling každé 3s)
+  const fetchTickets = useCallback(async () => {
     try {
       const res = await fetch("/api/kitchen", {
         cache: "no-store",
@@ -107,7 +108,7 @@ export default function KitchenPage() {
           isInitialLoadRef.current = false;
           prevPendingItemIdsRef.current = currentPendingIds;
         } else {
-          // Zjištění nových jídel
+          // Detekce nově přidaného jídla do kuchyně
           const hasNew = Array.from(currentPendingIds).some(
             (id) => !prevPendingItemIdsRef.current.has(id)
           );
@@ -124,25 +125,24 @@ export default function KitchenPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [playKitchenBell]);
 
   useEffect(() => {
     fetchTickets();
     const interval = setInterval(fetchTickets, 3000);
     const clock = setInterval(() => setNow(new Date()), 30000);
 
-    // Jakýkoliv klik na stránku kuchyně aktivuje AudioContext
-    const handleGlobalClick = () => unlockAudio();
-    window.addEventListener("click", handleGlobalClick, { once: true });
-    window.addEventListener("touchstart", handleGlobalClick, { once: true });
+    const handleGlobalTouch = () => unlockAudio();
+    window.addEventListener("click", handleGlobalTouch, { once: true });
+    window.addEventListener("touchstart", handleGlobalTouch, { once: true });
 
     return () => {
       clearInterval(interval);
       clearInterval(clock);
-      window.removeEventListener("click", handleGlobalClick);
-      window.removeEventListener("touchstart", handleGlobalClick);
+      window.removeEventListener("click", handleGlobalTouch);
+      window.removeEventListener("touchstart", handleGlobalTouch);
     };
-  }, []);
+  }, [fetchTickets, unlockAudio]);
 
   const toggleItemStatus = async (itemId: number, currentStatus: string) => {
     unlockAudio();
@@ -203,60 +203,6 @@ export default function KitchenPage() {
     return Math.max(0, Math.floor(diffMs / 60000));
   };
 
-  const handlePrint = (ticket: KitchenTicket) => {
-    const printWindow = window.open("", "_blank", "width=350,height=500");
-    if (!printWindow) return;
-
-    const time = new Date(ticket.createdAt).toLocaleTimeString("cs-CZ", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    const itemsHtml = ticket.items
-      .map(
-        (item) => `
-        <div style="margin-bottom:8px; border-bottom:1px dashed #ddd; padding-bottom:4px;">
-          <div style="display:flex; justify-content:space-between; font-size:16px; font-weight:bold;">
-            <span style="${item.status === "DONE" ? "text-decoration: line-through; opacity: 0.5;" : ""}">${item.name}</span>
-            <span style="background:#000; color:#fff; padding:1px 6px; border-radius:4px;">${item.quantity}×</span>
-          </div>
-          ${
-            item.note
-              ? `<div style="font-size:13px; font-weight:900; color:#b45309; margin-top:2px; padding-left:4px;">↳ POZN: ${item.note}</div>`
-              : ""
-          }
-        </div>
-      `
-      )
-      .join("");
-
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>BON - ${ticket.tableName}</title>
-          <style>
-            body { font-family: monospace; padding: 10px; margin: 0; width: 75mm; }
-            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 10px; }
-            .title { font-size: 20px; font-weight: 900; }
-            .footer { border-top: 2px solid #000; text-align: center; font-size: 11px; margin-top: 10px; padding-top: 5px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="title">BON: ${ticket.tableName}</div>
-            <div>${ticket.section} • Čas: ${time}</div>
-          </div>
-          <div>${itemsHtml}</div>
-          <div class="footer">Objednávka do kuchyně</div>
-          <script>
-            window.onload = function() { window.print(); window.close(); }
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-  };
-
   const activeTickets = tickets.filter((t) =>
     t.items.some((i) => i.status !== "DONE")
   );
@@ -285,8 +231,9 @@ export default function KitchenPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Tlačítko pro manuální otestování a odemčení zvuku */}
+          {/* Tlačítko zvuku */}
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               playKitchenBell();
@@ -301,14 +248,15 @@ export default function KitchenPage() {
           </button>
 
           <Link
-  href="/kitchen/history"
-  className="rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-2 text-xs font-bold transition flex items-center gap-1.5"
->
-  📅 Záznamy jídel
-</Link>
+            href="/kitchen/history"
+            className="rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-2 text-xs font-bold transition flex items-center gap-1.5"
+          >
+            📅 Záznamy jídel
+          </Link>
 
           <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs font-bold">
             <button
+              type="button"
               onClick={() => setShowCompleted(false)}
               className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
                 !showCompleted
@@ -319,6 +267,7 @@ export default function KitchenPage() {
               K vaření ({activeTickets.length})
             </button>
             <button
+              type="button"
               onClick={() => setShowCompleted(true)}
               className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
                 showCompleted
@@ -332,7 +281,7 @@ export default function KitchenPage() {
 
           <div
             className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse ml-1"
-            title="Online synchronizace"
+            title="Online synchronizace (každé 3s)"
           />
         </div>
       </header>
@@ -361,91 +310,96 @@ export default function KitchenPage() {
               return (
                 <div
                   key={ticket.orderId}
-                  className={`rounded-2xl border flex flex-col justify-between overflow-hidden shadow-lg transition ${
-                    showCompleted
-                      ? "border-slate-800 bg-slate-900/50 opacity-80"
-                      : isUrgent
-                      ? "border-red-600 bg-red-950/40"
+                  className={`rounded-2xl border flex flex-col justify-between overflow-hidden transition-all shadow-md ${
+                    isUrgent
+                      ? "bg-red-950/40 border-red-500/80 ring-2 ring-red-500/50"
                       : isWarning
-                      ? "border-amber-600 bg-amber-950/30"
-                      : "border-slate-800 bg-slate-900"
+                      ? "bg-amber-950/40 border-amber-500/80"
+                      : "bg-slate-900 border-slate-800"
                   }`}
                 >
-                  <div className="p-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/70">
+                  <div className="p-4 border-b border-slate-800/80 flex items-start justify-between">
                     <div>
-                      <span className="text-lg font-black text-white block leading-none">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                        {ticket.section || "Místnost"}
+                      </span>
+                      <h2 className="text-xl font-black text-white leading-tight">
                         {ticket.tableName}
-                      </span>
-                      <span className="text-[11px] font-semibold text-slate-400">
-                        {ticket.section}
-                      </span>
+                      </h2>
                     </div>
 
-                    {!showCompleted && (
-                      <div
-                        className={`text-xs font-black px-2 py-1 rounded-lg ${
+                    <div className="text-right">
+                      <span
+                        className={`inline-block px-2.5 py-0.5 rounded-lg text-xs font-black ${
                           isUrgent
-                            ? "bg-red-500 text-white animate-bounce"
+                            ? "bg-red-500 text-white animate-pulse"
                             : isWarning
-                            ? "bg-amber-500 text-black"
+                            ? "bg-amber-500 text-slate-950"
                             : "bg-slate-800 text-slate-300"
                         }`}
                       >
                         ⏱ {waitMins} min
-                      </div>
-                    )}
+                      </span>
+                      <span className="text-[11px] text-slate-500 block mt-1">
+                        {new Date(ticket.createdAt).toLocaleTimeString("cs-CZ", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="p-3 space-y-2 flex-1">
+                  {/* Seznam jídel na lístku */}
+                  <div className="p-4 space-y-2.5 flex-1">
                     {ticket.items.map((item) => {
                       const isDone = item.status === "DONE";
                       return (
-                        <button
+                        <div
                           key={item.id}
                           onClick={() => toggleItemStatus(item.id, item.status)}
-                          className={`w-full text-left p-2.5 rounded-xl border transition cursor-pointer flex flex-col gap-1 ${
+                          className={`p-3 rounded-xl border transition cursor-pointer flex items-center justify-between select-none ${
                             isDone
-                              ? "border-slate-800/80 bg-slate-950/40 opacity-40 line-through"
-                              : "border-slate-700 bg-slate-800/80 hover:bg-slate-700/80"
+                              ? "bg-slate-900/50 border-slate-800/50 opacity-40 line-through"
+                              : "bg-slate-800/80 border-slate-700 hover:border-amber-400"
                           }`}
                         >
-                          <div className="flex items-center justify-between">
-                            <span className="font-extrabold text-sm text-white">
+                          <div className="flex-1 pr-2">
+                            <span className="font-extrabold text-base text-white block leading-snug">
                               {item.name}
                             </span>
-                            <span className="bg-amber-400 text-slate-950 font-black px-2 py-0.5 rounded-md text-xs">
-                              {item.quantity}×
-                            </span>
+                            {item.note && (
+                              <span className="text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 inline-block mt-1">
+                                ↳ {item.note}
+                              </span>
+                            )}
                           </div>
-
-                          {item.note && (
-                            <span className="text-xs font-bold text-amber-300 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/40 inline-block self-start">
-                              ↳ POZN: {item.note}
-                            </span>
-                          )}
-                        </button>
+                          <span
+                            className={`px-2.5 py-1 rounded-lg text-sm font-black ${
+                              isDone
+                                ? "bg-slate-800 text-slate-500"
+                                : "bg-amber-500 text-slate-950"
+                            }`}
+                          >
+                            {item.quantity}×
+                          </span>
+                        </div>
                       );
                     })}
                   </div>
 
-                  <div className="p-3 border-t border-slate-800 bg-slate-900/90 flex gap-2">
-                    <button
-                      onClick={() => handlePrint(ticket)}
-                      className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition cursor-pointer"
-                      title="Vytisknout bon"
-                    >
-                      🖨️ Bon
-                    </button>
+                  {/* Akce dole na kartě */}
+                  <div className="p-3 bg-slate-900/90 border-t border-slate-800/80">
                     {hasPending ? (
                       <button
+                        type="button"
                         onClick={() => handleMarkAllOrderDone(ticket)}
-                        className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black transition cursor-pointer shadow-xs active:scale-95"
+                        className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs transition cursor-pointer active:scale-95 flex items-center justify-center gap-1.5 shadow-xs"
                       >
-                        ✓ Vydat vše
+                        ✓ Vydat celou objednávku
                       </button>
                     ) : (
-                      <div className="flex-1 text-center py-2 text-xs font-bold text-emerald-400">
-                        Vše připraveno
+                      <div className="text-center text-xs font-bold text-emerald-400 py-1">
+                        ✓ Všechna jídla uvařena
                       </div>
                     )}
                   </div>
