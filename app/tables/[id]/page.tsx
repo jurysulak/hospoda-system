@@ -30,6 +30,7 @@ interface Order {
 interface TableData {
   id: number;
   name: string;
+  section?: string | null;
   orders: Order[];
 }
 
@@ -87,6 +88,15 @@ export default function TableDetailPage() {
   useEffect(() => {
     loadData();
   }, [tableId]);
+
+  // Cesta zpět na plánek (pokud má stůl sekci, vrátí se do ní, jinak do vnitřku)
+  const mapBackUrl = useMemo(() => {
+    if (!table?.section) return "/section/vnitrek";
+    const sec = table.section.toLowerCase();
+    if (sec.includes("zahrad")) return "/section/zahradka";
+    if (sec.includes("salon")) return "/section/salonek";
+    return "/section/vnitrek";
+  }, [table]);
 
   const currentOrder = table?.orders?.[0] || null;
   const rawItems = currentOrder?.items || [];
@@ -160,7 +170,7 @@ export default function TableDetailPage() {
     }
   };
 
-  // Vydání POUZE JEDNOHO KUSU ze žluté skupiny (kliknutím na řádek)
+  // Vydání POUZE JEDNOHO KUSU ze žluté skupiny
   const handleServeSingleItem = async (itemIds: number[]) => {
     if (itemIds.length === 0) return;
     const targetId = itemIds[0];
@@ -229,7 +239,7 @@ export default function TableDetailPage() {
     }
   };
 
-  // Kliknutí na již vydanou položku (přidá další 1 ks do přípravy)
+  // Kliknutí na již vydanou položku
   const handleServedItemClick = async (item: OrderItem) => {
     if (splitMode) {
       const selected = splitSelected[item.id] || 0;
@@ -341,7 +351,8 @@ export default function TableDetailPage() {
         setSplitMode(false);
         setSplitSelected({});
         if (!splitMode || splitSum === totalAccountSum) {
-          router.push("/");
+          // Návrat na plánek stolu
+          router.push(mapBackUrl);
         } else {
           loadData();
         }
@@ -358,11 +369,12 @@ export default function TableDetailPage() {
       {/* Horní lišta */}
       <header className="h-14 bg-slate-900 border-b border-slate-800 px-4 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
+          {/* Návrat na plánek stolů */}
           <Link
-            href="/"
+            href={mapBackUrl}
             className="rounded-xl bg-slate-800 hover:bg-slate-700 px-3.5 py-2 text-xs font-bold text-slate-300 transition"
           >
-            ← Stoly
+            ← Plánek stolů
           </Link>
           <div className="flex items-baseline gap-2">
             <h1 className="text-base font-black text-white tracking-tight">
@@ -472,7 +484,6 @@ export default function TableDetailPage() {
                         </div>
 
                         <div className="flex items-center gap-1.5">
-                          {/* Tlačítko -1 ks */}
                           <button
                             type="button"
                             onClick={(e) => handleDecreasePendingGroup(e, itemIds)}
@@ -482,12 +493,10 @@ export default function TableDetailPage() {
                             −
                           </button>
 
-                          {/* Tlačítko Vydat 1 ks */}
                           <span className="bg-amber-500 text-slate-950 font-black px-2 py-1 rounded-lg text-xs shadow-2xs">
                             +1 vydat
                           </span>
 
-                          {/* Tlačítko Vydat vše pro tuto konkrétní skupinu */}
                           {totalQty > 1 && (
                             <button
                               type="button"
