@@ -13,22 +13,30 @@ interface PrintReceiptParams {
   paymentMethod: "CASH" | "CARD";
 }
 
+// Odstránenie diakritiky pre bezproblémovú tlač
+function stripAccents(str: string): string {
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
 export function printReceiptViaRawBT({
   tableName,
   items,
   totalAmount,
   paymentMethod,
 }: PrintReceiptParams) {
-  const LINE_WIDTH = 48; // Šířka řádku pro 80mm tiskárnu s běžným písmem Font A
+  const LINE_WIDTH = 42; // Bezpečná šírka pre 80mm kotúčik pri štandardnom písme
 
   const center = (text: string) => {
-    const pad = Math.max(0, Math.floor((LINE_WIDTH - text.length) / 2));
-    return " ".repeat(pad) + text;
+    const clean = stripAccents(text);
+    const pad = Math.max(0, Math.floor((LINE_WIDTH - clean.length) / 2));
+    return " ".repeat(pad) + clean;
   };
 
   const justify = (left: string, right: string) => {
-    const space = Math.max(1, LINE_WIDTH - left.length - right.length);
-    return left + " ".repeat(space) + right;
+    const cleanLeft = stripAccents(left);
+    const cleanRight = stripAccents(right);
+    const space = Math.max(1, LINE_WIDTH - cleanLeft.length - cleanRight.length);
+    return cleanLeft + " ".repeat(space) + cleanRight;
   };
 
   const divider = "-".repeat(LINE_WIDTH);
@@ -39,51 +47,43 @@ export function printReceiptViaRawBT({
   const timeStr = now.toLocaleTimeString("cs-CZ", {
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
   });
 
   const lines: string[] = [
-    center("HOSPODA U ŠULÁKŮ"),
-    center("Pekařská 349/99, Opava-Kateřinky"),
+    center("HOSPODA U SULAKU"),
+    center("Pekarska 349/99, Opava-Katerinky"),
     divider,
-    justify(`Stůl: ${tableName}`, `${dateStr} ${timeStr}`),
+    justify(`Stul: ${tableName}`, `${dateStr} ${timeStr}`),
     doubleDivider,
   ];
 
-  // Položky
   items.forEach((item) => {
-    const itemTotal = `${item.quantity * item.unitPrice} Kč`;
-    const itemQty = `${item.quantity}x ${item.unitPrice} Kč`;
+    const itemTotal = `${item.quantity * item.unitPrice} Kc`;
+    const itemQty = `${item.quantity}x ${item.unitPrice} Kc`;
 
-    // 1. řádek: Název položky
-    lines.push(item.name);
-    // 2. řádek: Počet ks x cena zarovnané vlevo, celkem vpravo
+    lines.push(stripAccents(item.name));
     lines.push(justify(`   ${itemQty}`, itemTotal));
   });
 
   lines.push(divider);
   lines.push(
     justify(
-      "CELKEM K ÚHRADĚ:",
-      `${totalAmount.toLocaleString("cs-CZ")} Kč`
+      "CELKOM K UHRADE:",
+      `${totalAmount.toLocaleString("cs-CZ")} Kc`
     )
   );
   lines.push(
     justify(
-      "Způsob úhrady:",
-      paymentMethod === "CASH" ? "HOTOVOST" : "PLATEBNÍ KARTA"
+      "Sposob uhrady:",
+      paymentMethod === "CASH" ? "HOTOVOST" : "KARTA"
     )
   );
   lines.push(doubleDivider);
-  lines.push(center("Děkujeme za návštěvu!"));
-  lines.push("\n\n\n"); // Posuv papíru před uříznutím
+  lines.push(center("Dakujeme za navstevu!"));
+  lines.push("\n\n\n\n"); // Posun papiera na odrezanie
 
-  const plainText = lines.join("\n");
+  const textToPrint = lines.join("\n");
 
-  // Odeslání do aplikace RawBT přes intent URI
-  const rawbtUrl = `rawbt:data:text/plain;charset=utf-8,${encodeURIComponent(
-    plainText
-  )}`;
-
-  window.location.href = rawbtUrl;
+  // Priamy odkaz pre RawBT s textovým obsahom
+  window.location.href = `rawbt:text/plain;utf-8,${encodeURIComponent(textToPrint)}`;
 }
