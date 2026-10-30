@@ -13,7 +13,6 @@ interface PrintReceiptParams {
   paymentMethod: "CASH" | "CARD";
 }
 
-// Odstránenie diakritiky pre čistú termotlač
 function stripAccents(str: string): string {
   return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
@@ -24,7 +23,7 @@ export function printReceiptViaRawBT({
   totalAmount,
   paymentMethod,
 }: PrintReceiptParams) {
-  const LINE_WIDTH = 42; // Štandardná šírka pre 80mm pásku pri bežnom fonte
+  const LINE_WIDTH = 42;
 
   const center = (text: string) => {
     const clean = stripAccents(text);
@@ -80,11 +79,18 @@ export function printReceiptViaRawBT({
   );
   lines.push(doubleDivider);
   lines.push(center("Dekujeme za navstevu!"));
-  lines.push("\n\n\n\n"); // Posuv papiera pred odrezaním
+  lines.push("\n\n\n\n");
 
   const plainText = lines.join("\n");
 
-  // Presmerovanie na RawBT s parametrami textu
-  const url = `rawbt:data:text/plain;charset=utf-8,${encodeURIComponent(plainText)}`;
-  window.location.href = url;
+  // Přímé otevření čistého textu v RawBT přes oficiální Android Intent
+  const intentUrl =
+    "intent:#Intent;" +
+    "action=android.intent.action.SEND;" +
+    "type=text/plain;" +
+    `S.android.intent.extra.TEXT=${encodeURIComponent(plainText)};` +
+    "package=ru.a402d.rawbtprinter;" +
+    "end;";
+
+  window.location.href = intentUrl;
 }
