@@ -7,23 +7,26 @@ interface PrintItem {
 }
 
 interface PrintReceiptParams {
+  receiptNumber?: string | number;
   tableName: string;
   items: PrintItem[];
   totalAmount: number;
   paymentMethod: "CASH" | "CARD";
 }
 
+// Odstranění háčků a čárek pro čistý termotisk bez chyb
 function stripAccents(str: string): string {
   return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
 export function printReceiptViaRawBT({
+  receiptNumber,
   tableName,
   items,
   totalAmount,
   paymentMethod,
 }: PrintReceiptParams) {
-  const LINE_WIDTH = 42;
+  const LINE_WIDTH = 42; // Šířka řádku pro 80mm tiskárnu
 
   const center = (text: string) => {
     const clean = stripAccents(text);
@@ -46,16 +49,24 @@ export function printReceiptViaRawBT({
   const timeStr = now.toLocaleTimeString("cs-CZ", {
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
   });
+
+  const receiptNumStr =
+    receiptNumber || `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
 
   const lines: string[] = [
     center("HOSPODA U SULAKU"),
-    center("Pekarska 349/99, Opava-Katerinky"),
+    center("PEKARSKA 349/99"),
+    center("747 05 OPAVA"),
+    center("ICO: 73174475"),
     divider,
+    justify(`C. UCTENKY: ${receiptNumStr}`, ""),
     justify(`Stul: ${tableName}`, `${dateStr} ${timeStr}`),
     doubleDivider,
   ];
 
+  // Rozpis položek účtu
   items.forEach((item) => {
     const itemTotal = `${item.quantity * item.unitPrice} Kc`;
     const itemQty = `${item.quantity}x ${item.unitPrice} Kc`;
@@ -67,7 +78,7 @@ export function printReceiptViaRawBT({
   lines.push(divider);
   lines.push(
     justify(
-      "CELKEM K UHRADE:",
+      "CELKEM CZK:",
       `${totalAmount.toLocaleString("cs-CZ")} Kc`
     )
   );
@@ -78,12 +89,11 @@ export function printReceiptViaRawBT({
     )
   );
   lines.push(doubleDivider);
-  lines.push(center("Dekujeme za navstevu!"));
+  lines.push(center("********* DEKUJEME VAM *********"));
   lines.push("\n\n\n\n");
 
   const plainText = lines.join("\n");
 
-  // Klíčová oprava: explicitní předání typu text/plain bezpečně přes encodeURIComponent
-  // Tento URI formát RawBT spolehlivě zachytí a převede na čitelný tisk
-  window.location.href = `rawbt:text?data=${encodeURIComponent(plainText)}`;
+  // Čistý protokol rawbt: bez prefixu text?data=, který se tiskl na papír
+  window.location.href = `rawbt:${encodeURIComponent(plainText)}`;
 }
