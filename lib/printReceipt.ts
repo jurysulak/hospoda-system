@@ -13,7 +13,7 @@ interface PrintReceiptParams {
   paymentMethod: "CASH" | "CARD";
 }
 
-// Odstránenie diakritiky pre bezproblémovú tlač
+// Odstránenie diakritiky pre čistú termotlač
 function stripAccents(str: string): string {
   return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
@@ -24,7 +24,7 @@ export function printReceiptViaRawBT({
   totalAmount,
   paymentMethod,
 }: PrintReceiptParams) {
-  const LINE_WIDTH = 42; // Bezpečná šírka pre 80mm kotúčik pri štandardnom písme
+  const LINE_WIDTH = 42; // Štandardná šírka pre 80mm pásku pri bežnom fonte
 
   const center = (text: string) => {
     const clean = stripAccents(text);
@@ -68,22 +68,23 @@ export function printReceiptViaRawBT({
   lines.push(divider);
   lines.push(
     justify(
-      "CELKOM K UHRADE:",
+      "CELKEM K UHRADE:",
       `${totalAmount.toLocaleString("cs-CZ")} Kc`
     )
   );
   lines.push(
     justify(
-      "Sposob uhrady:",
+      "Zpusob uhrady:",
       paymentMethod === "CASH" ? "HOTOVOST" : "KARTA"
     )
   );
   lines.push(doubleDivider);
-  lines.push(center("Dakujeme za navstevu!"));
-  lines.push("\n\n\n\n"); // Posun papiera na odrezanie
+  lines.push(center("Dekujeme za navstevu!"));
+  lines.push("\n\n\n\n"); // Posuv papiera pred odrezaním
 
-  const textToPrint = lines.join("\n");
+  const plainText = lines.join("\n");
 
-  // Priamy odkaz pre RawBT s textovým obsahom
-  window.location.href = `rawbt:text/plain;utf-8,${encodeURIComponent(textToPrint)}`;
+  // Presmerovanie na RawBT s parametrami textu
+  const url = `rawbt:data:text/plain;charset=utf-8,${encodeURIComponent(plainText)}`;
+  window.location.href = url;
 }
