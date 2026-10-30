@@ -83,14 +83,7 @@ export function printReceiptViaRawBT({
 
   const plainText = lines.join("\n");
 
-  // Přímé otevření čistého textu v RawBT přes oficiální Android Intent
-  const intentUrl =
-    "intent:#Intent;" +
-    "action=android.intent.action.SEND;" +
-    "type=text/plain;" +
-    `S.android.intent.extra.TEXT=${encodeURIComponent(plainText)};` +
-    "package=ru.a402d.rawbtprinter;" +
-    "end;";
-
-  window.location.href = intentUrl;
+  // Klíčová oprava: explicitní předání typu text/plain bezpečně přes encodeURIComponent
+  // Tento URI formát RawBT spolehlivě zachytí a převede na čitelný tisk
+  window.location.href = `rawbt:text?data=${encodeURIComponent(plainText)}`;
 }
