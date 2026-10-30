@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { printDailySummaryViaRawBT } from "@/lib/printReceipt";
 
 interface PaymentItem {
   id: number;
@@ -103,111 +104,14 @@ export default function SummaryPage() {
     }
   };
 
-  // Tisk denní uzávěrky (Z-Report) pro 80mm tiskárnu
+  // Vytištění denního souhrnu přímo přes RawBT
   const handlePrintDailySummary = (day: DayData) => {
-    const printWindow = window.open("", "_blank", "width=380,height=600");
-    if (!printWindow) return;
-
-    const formattedDate = new Date(day.date).toLocaleDateString("cs-CZ", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
+    printDailySummaryViaRawBT({
+      totalAmount: day.total,
+      paymentCount: day.count,
+      cashAmount: day.cash,
+      cardAmount: day.card,
     });
-
-    const paymentsRows = day.payments
-      .map(
-        (p) => `
-        <tr style="border-bottom: 1px dotted #ccc; font-size: 12px;">
-          <td style="padding: 3px 0;">${p.time}</td>
-          <td style="padding: 3px 0;">${p.tableName}</td>
-          <td style="padding: 3px 0; text-align: center;">${p.method === "CASH" ? "HOTOVOST" : "KARTA"}</td>
-          <td style="padding: 3px 0; text-align: right; font-weight: bold;">${p.amount} Kč</td>
-        </tr>
-      `
-      )
-      .join("");
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8" />
-        <title>Denní uzávěrka - ${formattedDate}</title>
-        <style>
-          @page { margin: 0; }
-          body {
-            font-family: monospace, -apple-system, BlinkMacSystemFont, sans-serif;
-            width: 76mm;
-            margin: 0 auto;
-            padding: 8px 4px;
-            color: #000;
-          }
-          .text-center { text-align: center; }
-          .divider { border-top: 1px dashed #000; margin: 8px 0; }
-          .double-divider { border-top: 2px solid #000; margin: 8px 0; }
-          .row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px; }
-          .bold { font-weight: bold; }
-          table { width: 100%; border-collapse: collapse; margin-top: 6px; }
-        </style>
-      </head>
-      <body>
-        <div class="text-center">
-          <div style="font-size: 18px; font-weight: 900; letter-spacing: 0.5px;">HOSPODA U ŠULÁKŮ</div>
-          <div style="font-size: 13px; font-weight: bold; margin-top: 2px;">DENNÍ UZÁVĚRKA (Z-REPORT)</div>
-          <div style="font-size: 12px; margin-top: 2px;">Datum: ${formattedDate}</div>
-        </div>
-
-        <div class="double-divider"></div>
-
-        <div class="row">
-          <span>Celkový obrat:</span>
-          <span class="bold" style="font-size: 15px;">${day.total.toLocaleString("cs-CZ")} Kč</span>
-        </div>
-        <div class="row">
-          <span>Hotovost:</span>
-          <span class="bold">${day.cash.toLocaleString("cs-CZ")} Kč</span>
-        </div>
-        <div class="row">
-          <span>Platební karty:</span>
-          <span class="bold">${day.card.toLocaleString("cs-CZ")} Kč</span>
-        </div>
-        <div class="row">
-          <span>Počet plateb:</span>
-          <span class="bold">${day.count}</span>
-        </div>
-
-        <div class="divider"></div>
-        <div style="font-size: 11px; font-weight: bold; text-transform: uppercase;">Rozpad plateb dne:</div>
-
-        <table>
-          <thead>
-            <tr style="border-bottom: 1px solid #000; font-size: 11px;">
-              <th style="text-align: left;">Čas</th>
-              <th style="text-align: left;">Stůl</th>
-              <th style="text-align: center;">Typ</th>
-              <th style="text-align: right;">Částka</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${paymentsRows}
-          </tbody>
-        </table>
-
-        <div class="double-divider"></div>
-        <div class="text-center" style="font-size: 10px; margin-top: 6px;">
-          Vygenerováno: ${new Date().toLocaleTimeString("cs-CZ")} • POS Systém
-        </div>
-
-        <script>
-          window.onload = function() {
-            window.print();
-            window.close();
-          };
-        </script>
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
   };
 
   const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
@@ -348,84 +252,56 @@ export default function SummaryPage() {
           </div>
         </div>
 
-        {/* Kalendář a detail dne */}
+        {/* Hlavní grid: Kalendář + Detail vybraného dne */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 rounded-3xl bg-white border border-slate-200 p-4 shadow-xs">
-            <div className="grid grid-cols-7 gap-1 text-center font-black text-xs text-slate-400 pb-2 border-b border-slate-100">
+          {/* Kalendář */}
+          <div className="lg:col-span-2 rounded-2xl bg-white border border-slate-200 p-4 shadow-xs">
+            <div className="grid grid-cols-7 gap-1 text-center font-black text-[11px] text-slate-400 mb-2 uppercase">
               <span>Po</span>
               <span>Út</span>
               <span>St</span>
               <span>Čt</span>
               <span>Pá</span>
-              <span className="text-amber-600">So</span>
-              <span className="text-amber-600">Ne</span>
+              <span>So</span>
+              <span>Ne</span>
             </div>
 
-            <div className="grid grid-cols-7 gap-1.5 pt-2">
+            <div className="grid grid-cols-7 gap-1.5">
               {Array.from({ length: firstDayOfWeek }).map((_, i) => (
-                <div key={`empty-${i}`} className="min-h-[64px] sm:min-h-[82px] rounded-xl bg-slate-50/40 opacity-30" />
+                <div key={`empty-${i}`} className="min-h-[64px] rounded-xl bg-slate-50/50" />
               ))}
 
               {Array.from({ length: daysInMonth }).map((_, i) => {
                 const dayNum = i + 1;
-                const dateKey = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+                const dateKey = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(
+                  dayNum
+                ).padStart(2, "0")}`;
                 const dayInfo = data?.days?.[dateKey];
                 const isSelected = selectedDayDetail?.date === dateKey;
-                const isToday = new Date().toISOString().split("T")[0] === dateKey;
 
                 return (
                   <button
-                    key={dayNum}
-                    type="button"
-                    onClick={() => {
-                      if (dayInfo) {
-                        setSelectedDayDetail(dayInfo);
-                      } else {
-                        setSelectedDayDetail({
-                          date: dateKey,
-                          day: dayNum,
-                          total: 0,
-                          cash: 0,
-                          card: 0,
-                          count: 0,
-                          payments: [],
-                        });
-                      }
-                    }}
-                    className={`min-h-[64px] sm:min-h-[82px] p-1.5 rounded-2xl border text-left flex flex-col justify-between transition cursor-pointer active:scale-95 ${
+                    key={dateKey}
+                    onClick={() => dayInfo && setSelectedDayDetail(dayInfo)}
+                    disabled={!dayInfo}
+                    className={`min-h-[68px] p-2 rounded-xl border text-left flex flex-col justify-between transition cursor-pointer ${
                       isSelected
-                        ? "border-amber-500 bg-amber-50/70 shadow-sm ring-2 ring-amber-400"
-                        : dayInfo && dayInfo.total > 0
-                        ? "border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50"
-                        : "border-slate-100 bg-slate-50/60 hover:bg-slate-100"
+                        ? "border-amber-500 bg-amber-50/60 ring-2 ring-amber-400"
+                        : dayInfo
+                        ? "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                        : "border-slate-100 bg-slate-50/30 opacity-40 cursor-default"
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`text-xs font-black w-5 h-5 rounded-full flex items-center justify-center ${
-                          isToday ? "bg-slate-900 text-white" : "text-slate-700"
-                        }`}
-                      >
-                        {dayNum}
-                      </span>
-                      {dayInfo && dayInfo.total > 0 && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      )}
-                    </div>
-
-                    {dayInfo && dayInfo.total > 0 ? (
-                      <div className="mt-1">
-                        <span className="font-black text-xs sm:text-sm text-slate-900 block leading-tight truncate">
-                          {dayInfo.total} Kč
+                    <span className="text-xs font-black text-slate-800">{dayNum}</span>
+                    {dayInfo && (
+                      <div>
+                        <span className="text-xs font-black text-emerald-700 block leading-tight">
+                          {dayInfo.total.toLocaleString("cs-CZ")} Kč
                         </span>
-                        <span className="text-[10px] text-slate-400 font-semibold block">
+                        <span className="text-[10px] text-slate-400 block font-semibold">
                           {dayInfo.count} účtů
                         </span>
                       </div>
-                    ) : (
-                      <span className="text-[10px] text-slate-300 font-bold block mt-auto">
-                        0 Kč
-                      </span>
                     )}
                   </button>
                 );
@@ -433,86 +309,72 @@ export default function SummaryPage() {
             </div>
           </div>
 
-          {/* DETAIL VYBRANÉHO DNE S TLAČÍTKEM TISKU */}
-          <div className="rounded-3xl bg-white border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
-            <div>
-              <div className="border-b border-slate-100 pb-3 flex items-start justify-between">
-                <div>
-                  <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider block">
-                    Uzávěrka dne
-                  </span>
-                  <h3 className="text-lg font-black text-slate-900">
-                    {selectedDayDetail
-                      ? `${selectedDayDetail.day}. ${monthNames[selectedMonth - 1]} ${selectedYear}`
-                      : "Vyberte den"}
-                  </h3>
-                </div>
-
-                {selectedDayDetail && selectedDayDetail.total > 0 && (
+          {/* Detail dne a tlačítko tisku */}
+          <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
+            {selectedDayDetail ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-base font-black text-slate-900">
+                      Denní detail ({new Date(selectedDayDetail.date).toLocaleDateString("cs-CZ")})
+                    </h3>
+                    <p className="text-xs text-slate-500 font-medium">
+                      Celkem {selectedDayDetail.count} uzavřených plateb
+                    </p>
+                  </div>
                   <button
-                    type="button"
                     onClick={() => handlePrintDailySummary(selectedDayDetail)}
-                    className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs transition cursor-pointer flex items-center gap-1.5 shadow-xs"
-                    title="Vytisknout lístek denní uzávěrky"
+                    className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition active:scale-95 cursor-pointer"
                   >
                     🖨️ Tisknout uzávěrku
                   </button>
-                )}
-              </div>
+                </div>
 
-              {selectedDayDetail ? (
-                <div className="mt-4 space-y-3">
-                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-2">
-                    <div className="flex justify-between items-baseline">
-                      <span className="text-xs text-slate-500 font-semibold">Tržba celkem:</span>
-                      <span className="text-lg font-black text-slate-900">{selectedDayDetail.total} Kč</span>
-                    </div>
-                    <div className="flex justify-between items-baseline text-xs">
-                      <span className="text-slate-500 font-semibold">💵 V hotovosti:</span>
-                      <span className="font-bold text-slate-800">{selectedDayDetail.cash} Kč</span>
-                    </div>
-                    <div className="flex justify-between items-baseline text-xs">
-                      <span className="text-slate-500 font-semibold">💳 Kartou:</span>
-                      <span className="font-bold text-slate-800">{selectedDayDetail.card} Kč</span>
-                    </div>
-                    <div className="flex justify-between items-baseline text-xs pt-1 border-t border-slate-200">
-                      <span className="text-slate-500 font-semibold">Počet účtů:</span>
-                      <span className="font-bold text-slate-800">{selectedDayDetail.count}</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <span className="text-xs font-black text-slate-700 block mb-2">
-                      Přehled účtů za den:
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="text-slate-500 block">Celkem den:</span>
+                    <span className="text-base font-black text-emerald-700">
+                      {selectedDayDetail.total.toLocaleString("cs-CZ")} Kč
                     </span>
-                    <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-                      {selectedDayDetail.payments.length > 0 ? (
-                        selectedDayDetail.payments.map((p) => (
-                          <div
-                            key={p.id}
-                            className="p-2 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs font-semibold"
-                          >
-                            <span className="text-slate-700">
-                              <span className="font-bold text-slate-900">{p.time}</span> • {p.tableName}
-                              <span className="text-[10px] text-slate-400 ml-1">({p.method === "CASH" ? "Hotově" : "Kartou"})</span>
-                            </span>
-                            <span className="font-black text-slate-900">{p.amount} Kč</span>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-xs text-slate-400 font-medium py-3 text-center">
-                          V tento den nebyla zaznamenána žádná tržba.
-                        </p>
-                      )}
-                    </div>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="text-slate-500 block">Hotovost / Karta:</span>
+                    <span className="text-xs font-bold text-slate-800 block mt-0.5">
+                      💵 {selectedDayDetail.cash} Kč
+                    </span>
+                    <span className="text-xs font-bold text-slate-800 block">
+                      💳 {selectedDayDetail.card} Kč
+                    </span>
                   </div>
                 </div>
-              ) : (
-                <div className="text-xs text-slate-400 font-medium py-8 text-center">
-                  Vyberte den v kalendáři pro zobrazení detailu.
+
+                {/* Seznam účtů daného dne */}
+                <div className="space-y-1.5 max-h-[340px] overflow-y-auto pr-1">
+                  <span className="text-[11px] font-black uppercase text-slate-400 block tracking-wider mb-1">
+                    Seznam plateb dne:
+                  </span>
+                  {selectedDayDetail.payments.map((p) => (
+                    <div
+                      key={p.id}
+                      className="p-2 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs"
+                    >
+                      <div>
+                        <span className="font-bold text-slate-800">{p.tableName}</span>
+                        <span className="text-[10px] text-slate-400 block">
+                          {p.time} • {p.method === "CASH" ? "Hotovost" : "Karta"}
+                        </span>
+                      </div>
+                      <span className="font-black text-slate-900">{p.amount} Kč</span>
+                    </div>
+                  ))}
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
+                <span className="text-3xl mb-2">📋</span>
+                <span className="text-xs font-bold">Vyber den v kalendáři pro zobrazení a tisk detailu</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
