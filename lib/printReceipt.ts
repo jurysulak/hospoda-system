@@ -14,7 +14,7 @@ interface PrintReceiptParams {
   paymentMethod: "CASH" | "CARD";
 }
 
-// Odstranění háčků a čárek pro čistý termotisk bez chyb
+// Odstranění diakritiky pro čistý termotisk
 function stripAccents(str: string): string {
   return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
@@ -26,7 +26,8 @@ export function printReceiptViaRawBT({
   totalAmount,
   paymentMethod,
 }: PrintReceiptParams) {
-  const LINE_WIDTH = 42; // Šířka řádku pro 80mm tiskárnu
+  // 48 znaků je přesná plná šířka pro 80mm tiskárnu Xprinter
+  const LINE_WIDTH = 48;
 
   const center = (text: string) => {
     const clean = stripAccents(text);
@@ -49,11 +50,15 @@ export function printReceiptViaRawBT({
   const timeStr = now.toLocaleTimeString("cs-CZ", {
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
   });
 
   const receiptNumStr =
-    receiptNumber || `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
+    receiptNumber ||
+    `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(
+      now.getDate()
+    ).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(
+      now.getMinutes()
+    ).padStart(2, "0")}`;
 
   const lines: string[] = [
     center("HOSPODA U SULAKU"),
@@ -66,7 +71,7 @@ export function printReceiptViaRawBT({
     doubleDivider,
   ];
 
-  // Rozpis položek účtu
+  // Položky účtu roztažené po celé šířce
   items.forEach((item) => {
     const itemTotal = `${item.quantity * item.unitPrice} Kc`;
     const itemQty = `${item.quantity}x ${item.unitPrice} Kc`;
@@ -90,10 +95,10 @@ export function printReceiptViaRawBT({
   );
   lines.push(doubleDivider);
   lines.push(center("********* DEKUJEME VAM *********"));
-  lines.push("\n\n\n\n");
+  // Zredukováno na minimum, aby pod textem nebyl zbytečný bílý pruh
+  lines.push("\n\n");
 
   const plainText = lines.join("\n");
 
-  // Čistý protokol rawbt: bez prefixu text?data=, který se tiskl na papír
   window.location.href = `rawbt:${encodeURIComponent(plainText)}`;
 }
