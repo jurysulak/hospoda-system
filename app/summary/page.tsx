@@ -122,56 +122,100 @@ export default function SummaryPage() {
     "Červenec", "Srpen", "Září", "Říjen", "Listopad", "Prosinec",
   ];
 
+  // Pomocné funkce pro číselník
+  const handleDigitPress = (digit: string) => {
+    if (pin.length < 4) {
+      const nextPin = pin + digit;
+      setPin(nextPin);
+      setPinError(false);
+      // Pokud zadáš 4. číslo, automaticky zkontroluje
+      if (nextPin.length === 4) {
+        if (nextPin === "1234") {
+          setIsAuthorized(true);
+        } else {
+          setPinError(true);
+          setTimeout(() => setPin(""), 600);
+        }
+      }
+    }
+  };
+
+  const handleDeleteDigit = () => {
+    setPin((prev) => prev.slice(0, -1));
+    setPinError(false);
+  };
+
   if (!isAuthorized) {
     return (
       <main className="min-h-screen bg-slate-900 flex items-center justify-center p-4 select-none">
-        <form
-          onSubmit={handlePinSubmit}
-          className="w-full max-w-sm rounded-3xl bg-slate-800 p-8 shadow-2xl border border-slate-700 space-y-6 text-center"
-        >
-          <div className="w-16 h-16 bg-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center text-3xl mx-auto">
-            🔒
-          </div>
+        <div className="w-full max-w-xs rounded-3xl bg-slate-800 p-6 shadow-2xl border border-slate-700 text-center space-y-6">
           <div>
+            <div className="w-14 h-14 bg-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-3">
+              🔒
+            </div>
             <h1 className="text-xl font-black text-white">Přehled tržeb</h1>
-            <p className="text-xs text-slate-400 mt-1">
-              Zadej PIN pro vstup do účetnictví
+            <p className="text-xs text-slate-400 mt-1">Zadej 4místný PIN kód</p>
+          </div>
+
+          {/* Zobrazení zadaných teček */}
+          <div className="flex justify-center gap-3">
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className={`w-4 h-4 rounded-full transition-all duration-200 ${
+                  pinError
+                    ? "bg-red-500 scale-110"
+                    : pin.length > i
+                    ? "bg-amber-400 scale-110"
+                    : "bg-slate-700"
+                }`}
+              />
+            ))}
+          </div>
+
+          {pinError && (
+            <p className="text-red-400 text-xs font-bold -mt-2">
+              Nesprávný PIN kód
             </p>
-          </div>
+          )}
 
-          <div>
-            <input
-              type="password"
-              inputMode="numeric"
-              maxLength={4}
-              placeholder="••••"
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              className="w-full text-center text-3xl tracking-widest font-black py-3 rounded-2xl bg-slate-900 border border-slate-700 text-white outline-none focus:border-amber-500"
-              autoFocus
-            />
-            {pinError && (
-              <p className="text-red-400 text-xs font-bold mt-2">
-                Nesprávný PIN kód
-              </p>
-            )}
-          </div>
+          {/* Dotyková klávesnice 1–9 a 0 */}
+          <div className="grid grid-cols-3 gap-3">
+            {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((num) => (
+              <button
+                key={num}
+                type="button"
+                onClick={() => handleDigitPress(num)}
+                className="h-16 rounded-2xl bg-slate-700/80 hover:bg-slate-600 active:scale-95 text-2xl font-black text-white shadow-xs transition cursor-pointer"
+              >
+                {num}
+              </button>
+            ))}
 
-          <div className="flex gap-2">
             <Link
               href="/"
-              className="flex-1 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold text-xs transition"
+              className="h-16 rounded-2xl bg-slate-700/40 hover:bg-slate-700 active:scale-95 text-xs font-bold text-slate-400 flex items-center justify-center transition"
             >
               Zpět
             </Link>
+
             <button
-              type="submit"
-              className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition cursor-pointer"
+              type="button"
+              onClick={() => handleDigitPress("0")}
+              className="h-16 rounded-2xl bg-slate-700/80 hover:bg-slate-600 active:scale-95 text-2xl font-black text-white shadow-xs transition cursor-pointer"
             >
-              Odemknout
+              0
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDeleteDigit}
+              className="h-16 rounded-2xl bg-red-950/40 hover:bg-red-900/60 active:scale-95 text-lg font-black text-red-400 flex items-center justify-center transition cursor-pointer"
+            >
+              ⌫
             </button>
           </div>
-        </form>
+        </div>
       </main>
     );
   }

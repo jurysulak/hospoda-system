@@ -72,19 +72,19 @@ export function printReceiptViaRawBT({
   // \x1b!\x00 = Normální písmo (standardní šířka 48 znaků)
   // \x1b!\x08 = Tučné standardní písmo
   const lines: string[] = [
-    "\x1b!\x30" + centerDouble("HOSPODA U SULAKU"),
-    "\x1b!\x00" + center("PEKARSKA 349/99"),
+    "\x1b!\x30" + centerDouble("HOSPODA U ŠULÁKŮ"),
+    "\x1b!\x00" + center("PEKAŘSKÁ 349/99"),
     center("747 05 OPAVA"),
     center("ICO: 73174475"),
     divider,
-    justify(`C. UCTENKY: ${receiptNumStr}`, ""),
-    justify(`Stul: ${tableName}`, `${dateStr} ${timeStr}`),
+    justify(`Č. UČTENKY: ${receiptNumStr}`, ""),
+    justify(`Stůl: ${tableName}`, `${dateStr} ${timeStr}`),
     doubleDivider,
   ];
 
   items.forEach((item) => {
-    const itemTotal = `${item.quantity * item.unitPrice} Kc`;
-    const itemQty = `${item.quantity}x ${item.unitPrice} Kc`;
+    const itemTotal = `${item.quantity * item.unitPrice} Kč`;
+    const itemQty = `${item.quantity}x ${item.unitPrice} Kč`;
 
     lines.push(stripAccents(item.name));
     lines.push(justify(`   ${itemQty}`, itemTotal));
@@ -95,18 +95,18 @@ export function printReceiptViaRawBT({
     "\x1b!\x08" +
       justify(
         "CELKEM CZK:",
-        `${totalAmount.toLocaleString("cs-CZ")} Kc`
+        `${totalAmount.toLocaleString("cs-CZ")} Kč`
       ) +
       "\x1b!\x00"
   );
   lines.push(
     justify(
-      "Zpusob uhrady:",
+      "Způsob úhrady:",
       paymentMethod === "CASH" ? "HOTOVOST" : "KARTA"
     )
   );
   lines.push(doubleDivider);
-  lines.push(center("********* DEKUJEME VAM *********"));
+  lines.push(center("********* DĚKUJEME VÁM *********"));
   lines.push("\n\n");
 
   const rawText = lines.join("\n");
@@ -131,39 +131,40 @@ export function printDailySummaryViaRawBT(summary: SummaryPrintParams) {
   });
 
   const lines: string[] = [
-    "\x1b!\x30" + centerDouble("HOSPODA U SULAKU"),
-    "\x1b!\x00" + center("PEKARSKA 349/99, 747 05 OPAVA"),
-    center("ICO: 73174475"),
+    "\x1b!\x30" + centerDouble("HOSPODA U ŠULÁKŮ"),
+    "\x1b!\x00" + center("PEKAŘSKÁ 349/99"),
+    center("747 05 OPAVA"),
+    center("IČO: 73174475"),
     divider,
-    "\x1b!\x08" + center("DENNI UZAVERKA / SOUHRN") + "\x1b!\x00",
+    "\x1b!\x08" + center("DENNÍ UZÁVĚRKA / SOUHRN") + "\x1b!\x00",
     justify("Datum tisku:", `${dateStr} ${timeStr}`),
     doubleDivider,
-    justify("Pocet plateb:", String(summary.paymentCount)),
+    justify("Počet plateb:", String(summary.paymentCount)),
     divider,
     "\x1b!\x08" +
-      justify("CELKOVA TRZBA:", `${summary.totalAmount.toLocaleString("cs-CZ")} Kc`) +
+      justify("CELKOVA TRŽBA:", `${summary.totalAmount.toLocaleString("cs-CZ")} Kč`) +
       "\x1b!\x00",
   ];
 
   if (summary.cashAmount !== undefined) {
-    lines.push(justify(" - Hotovost:", `${summary.cashAmount.toLocaleString("cs-CZ")} Kc`));
+    lines.push(justify(" - Hotovost:", `${summary.cashAmount.toLocaleString("cs-CZ")} Kč`));
   }
   if (summary.cardAmount !== undefined) {
-    lines.push(justify(" - Platebni karty:", `${summary.cardAmount.toLocaleString("cs-CZ")} Kc`));
+    lines.push(justify(" - Platebni karty:", `${summary.cardAmount.toLocaleString("cs-CZ")} Kč`));
   }
 
   if (summary.byProduct && summary.byProduct.length > 0) {
     lines.push(divider);
-    lines.push(center("PRODEJ PODLE POLOZEK"));
+    lines.push(center("PRODEJ PODLE POLOŽEK"));
     lines.push(divider);
     summary.byProduct.forEach((p) => {
       lines.push(stripAccents(p.productName));
-      lines.push(justify(`   ${p.totalQuantity} ks`, `${p.totalAmount.toLocaleString("cs-CZ")} Kc`));
+      lines.push(justify(`   ${p.totalQuantity} ks`, `${p.totalAmount.toLocaleString("cs-CZ")} Kč`));
     });
   }
 
   lines.push(doubleDivider);
-  lines.push(center("Konec denniho souhrnu"));
+  lines.push(center("Konec denního souhrnu"));
   lines.push("\n\n");
 
   const rawText = lines.join("\n");
