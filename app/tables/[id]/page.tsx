@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { printReceiptViaRawBT } from "@/lib/printReceipt";
 
 interface Product {
   id: number;
@@ -347,18 +348,41 @@ export default function TableDetailPage() {
       });
 
       if (res.ok) {
+        // Příprava položek k tisku
+        const itemsToPrint = splitMode
+          ? rawItems
+              .filter((i) => (splitSelected[i.id] || 0) > 0)
+              .map((i) => ({
+                name: i.productName,
+                quantity: splitSelected[i.id],
+                unitPrice: i.unitPrice,
+              }))
+          : rawItems.map((i) => ({
+              name: i.productName,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+            }));
+
+        // Spuštění tisku přes RawBT
+        printReceiptViaRawBT({
+          tableName: table?.name || `Stůl ${tableId}`,
+          items: itemsToPrint,
+          totalAmount: currentPayAmount,
+          paymentMethod: method,
+        });
+
         setIsPayModalOpen(false);
         setSplitMode(false);
         setSplitSelected({});
+
         if (!splitMode || splitSum === totalAccountSum) {
-          // Návrat na plánek stolu
           router.push(mapBackUrl);
         } else {
           loadData();
         }
       }
     } catch (e) {
-      console.error("Chyba při platbě:", e);
+      console.error("Chyba při platbě a tisku:", e);
     } finally {
       setIsPaying(false);
     }
