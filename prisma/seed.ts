@@ -155,6 +155,15 @@ const products = [
   { name: "Cyrilovy brambůrky", category: "Pochutiny", price: 49 },
   { name: "Arašídy", category: "Pochutiny", price: 49 },
   { name: "Uzené mandle", category: "Pochutiny", price: 69 },
+
+  // ==========================================
+  // VÍNO
+  // ==========================================
+  { name: "Bílé víno – rozl. dle nabídky (0,1 l)", category: "Víno", price: 40 },
+  { name: "Červené víno – rozl. dle nabídky (0,1 l)", category: "Víno", price: 40 },
+  { name: "Bílé, červené – láhev dle nabídky (0,7 l)", category: "Víno", price: 299 },
+  { name: "Sekt, Frizzante – dle nabídky (0,1 l)", category: "Víno", price: 40 },
+  { name: "Sekt, Frizzante – láhev dle nabídky (0,7 l)", category: "Víno", price: 299 },
 ];
 
 async function main() {

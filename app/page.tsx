@@ -36,7 +36,7 @@ export default function Home() {
           >
             <span className="text-4xl mb-2">🌳</span>
             <span className="text-3xl font-bold text-green-950">Zahrádka</span>
-          </a>
+          </a> 
 
           <a
             href="/section/salonek"
