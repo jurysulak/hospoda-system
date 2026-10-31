@@ -9,13 +9,14 @@ export default function Home() {
         </div>
 
         {/* Rychlý BAR shortcut - zmenšený proužek */}
-        <div className="flex justify-center">
+        <div className="flex justify-center mb-6">
           <a
-            href="/tables/1"
+            href="/api/bar"
             className="inline-flex items-center gap-3 rounded-2xl border-2 border-amber-400 bg-amber-100 hover:bg-amber-200/80 px-6 py-3 shadow-xs transition active:scale-95"
           >
             <span className="text-2xl">🍺</span>
             <span className="text-lg font-black text-amber-950">Rychlý BAR</span>
+            <span className="text-xs font-bold text-amber-800 bg-amber-200/80 px-2 py-0.5 rounded-lg">Rychlý prodej</span>
           </a>
         </div>
 
@@ -23,7 +24,7 @@ export default function Home() {
         <div className="grid gap-6 sm:grid-cols-3">
           <a
             href="/section/vnitrek"
-            className="flex min-h-[180px] flex-col items-center justify-center rounded-3xl border-2 border-blue-300 bg-blue-100 p-6 text-center shadow-sm transition active:scale-[0.99] hover:bg-blue-200/70"
+            className="flex min-h-[190px] flex-col items-center justify-center rounded-3xl border-2 border-blue-300 bg-blue-100 p-6 text-center shadow-sm transition active:scale-[0.99] hover:bg-blue-200/70"
           >
             <span className="text-4xl mb-2">🏠</span>
             <span className="text-3xl font-bold text-blue-950">Vnitřek</span>
@@ -31,7 +32,7 @@ export default function Home() {
 
           <a
             href="/section/zahradka"
-            className="flex min-h-[180px] flex-col items-center justify-center rounded-3xl border-2 border-green-300 bg-green-100 p-6 text-center shadow-sm transition active:scale-[0.99] hover:bg-green-200/70"
+            className="flex min-h-[190px] flex-col items-center justify-center rounded-3xl border-2 border-green-300 bg-green-100 p-6 text-center shadow-sm transition active:scale-[0.99] hover:bg-green-200/70"
           >
             <span className="text-4xl mb-2">🌳</span>
             <span className="text-3xl font-bold text-green-950">Zahrádka</span>
@@ -39,7 +40,7 @@ export default function Home() {
 
           <a
             href="/section/salonek"
-            className="flex min-h-[180px] flex-col items-center justify-center rounded-3xl border-2 border-purple-300 bg-purple-100 p-6 text-center shadow-sm transition active:scale-[0.99] hover:bg-purple-200/70"
+            className="flex min-h-[190px] flex-col items-center justify-center rounded-3xl border-2 border-purple-300 bg-purple-100 p-6 text-center shadow-sm transition active:scale-[0.99] hover:bg-purple-200/70"
           >
             <span className="text-4xl mb-2">🛋️</span>
             <span className="text-3xl font-bold text-purple-950">Salónek</span>
