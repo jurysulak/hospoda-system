@@ -51,8 +51,6 @@ const CATEGORY_PRIORITY: Record<string, number> = {
   "dezerty": 8,
 };
 
-const QUICK_NOTES = ["Bez cibule", "S sebou", "Bez ledu", "Více propéct", "Bez tatarky", "Ostré"];
-
 export default function TableDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -62,15 +60,16 @@ export default function TableDetailPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>("Vše");
 
+  // Vizuální zpětná vazba – ID produktu rozsvíceného na 1 sekundu
+  const [highlightedProductId, setHighlightedProductId] = useState<number | null>(null);
+
   // Režim dělení účtu
   const [splitMode, setSplitMode] = useState(false);
   const [splitSelected, setSplitSelected] = useState<Record<number, number>>({});
 
-  // Modály
+  // Modály a stav platby
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
-  const [noteItem, setNoteItem] = useState<OrderItem | null>(null);
-  const [noteText, setNoteText] = useState("");
 
   const loadData = async () => {
     try {
@@ -90,7 +89,7 @@ export default function TableDetailPage() {
     loadData();
   }, [tableId]);
 
-  // Cesta zpět na plánek (pokud má stůl sekci, vrátí se do ní, jinak do vnitřku)
+  // Cesta zpět do správné místnosti
   const mapBackUrl = useMemo(() => {
     if (!table?.section) return "/section/vnitrek";
     const sec = table.section.toLowerCase();
@@ -102,32 +101,9 @@ export default function TableDetailPage() {
   const currentOrder = table?.orders?.[0] || null;
   const rawItems = currentOrder?.items || [];
 
-  // Seskupení položek v přípravě (PENDING)
-  const groupedPendingItems = useMemo(() => {
-    const pendings = rawItems.filter((i) => i.status === "PENDING");
-    const map = new Map<string, { itemIds: number[]; sampleItem: OrderItem; totalQty: number }>();
-
-    for (const item of pendings) {
-      const key = `${item.productId}_${item.note || ""}`;
-      const existing = map.get(key);
-      if (existing) {
-        existing.itemIds.push(item.id);
-        existing.totalQty += item.quantity;
-      } else {
-        map.set(key, {
-          itemIds: [item.id],
-          sampleItem: item,
-          totalQty: item.quantity,
-        });
-      }
-    }
-
-    return Array.from(map.values());
-  }, [rawItems]);
-
-  // Vydané položky na účtu
+  // Všechny položky jdou rovnou na účet
   const servedItems = useMemo(() => {
-    return rawItems.filter((i) => i.status !== "PENDING");
+    return rawItems;
   }, [rawItems]);
 
   // Seřazení kategorií
@@ -143,7 +119,7 @@ export default function TableDetailPage() {
     ];
   }, [products]);
 
-  // Položky v aktivní kategorii
+  // Filtrované položky nabídky
   const displayedProducts = useMemo(() => {
     let list = products;
     if (activeCategory !== "Vše") {
@@ -157,176 +133,71 @@ export default function TableDetailPage() {
     });
   }, [products, activeCategory]);
 
-  // Přidání položky z nabídky
+  // Přidání produktu s 1s animací zvýraznění
   const handleAddProduct = async (product: Product) => {
+    setHighlightedProductId(product.id);
+    setTimeout(() => {
+      setHighlightedProductId(null);
+    }, 1000);
+
     try {
-      await fetch(`/api/tables/${tableId}/items`, {
+      const res = await fetch(`/api/tables/${tableId}/items`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ productId: product.id, quantity: 1 }),
       });
-      loadData();
+      if (res.ok) {
+        await loadData();
+      }
     } catch (e) {
       console.error("Chyba při přidávání položky:", e);
     }
   };
 
-  // Vydání POUZE JEDNOHO KUSU ze žluté skupiny
-  const handleServeSingleItem = async (itemIds: number[]) => {
-    if (itemIds.length === 0) return;
-    const targetId = itemIds[0];
-
+  // Odebrání 1 kusu z účtu
+  const handleRemoveSingleItem = async (itemId: number) => {
     try {
-      await fetch(`/api/order-items/${targetId}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "SERVED" }),
-      });
-      loadData();
-    } catch (e) {
-      console.error("Chyba při výdeji kusu:", e);
-    }
-  };
-
-  // Vydání VŠECH KUSŮ z dané žluté skupiny
-  const handleServeGroupAll = async (e: React.MouseEvent, itemIds: number[]) => {
-    e.stopPropagation();
-    try {
-      for (const id of itemIds) {
-        await fetch(`/api/order-items/${id}/status`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "SERVED" }),
-        });
-      }
-      loadData();
-    } catch (e) {
-      console.error("Chyba při výdeji skupiny:", e);
-    }
-  };
-
-  // Ubrání 1 ks ze žluté skupiny
-  const handleDecreasePendingGroup = async (e: React.MouseEvent, itemIds: number[]) => {
-    e.stopPropagation();
-    if (itemIds.length === 0) return;
-    const lastId = itemIds[itemIds.length - 1];
-
-    try {
-      await fetch(`/api/order-items/${lastId}/remove`, {
+      const res = await fetch(`/api/order-items/${itemId}/remove`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ quantity: 1 }),
       });
-      loadData();
-    } catch (e) {
-      console.error("Chyba při odebírání:", e);
-    }
-  };
-
-  // Hromadné vydání úplně všech žlutých položek na stole
-  const handleServeAllPending = async () => {
-    try {
-      const allPendingIds = groupedPendingItems.flatMap((g) => g.itemIds);
-      for (const id of allPendingIds) {
-        await fetch(`/api/order-items/${id}/status`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "SERVED" }),
-        });
+      if (res.ok) {
+        await loadData();
       }
-      loadData();
     } catch (e) {
-      console.error("Chyba při hromadném výdeji:", e);
+      console.error("Chyba při odebírání položky:", e);
     }
   };
 
-  // Kliknutí na již vydanou položku
-  const handleServedItemClick = async (item: OrderItem) => {
-    if (splitMode) {
-      const selected = splitSelected[item.id] || 0;
-      setSplitSelected((prev) => ({
-        ...prev,
-        [item.id]: selected < item.quantity ? selected + 1 : 0,
-      }));
-      return;
-    }
-
-    try {
-      await fetch(`/api/tables/${tableId}/items`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productId: item.productId,
-          quantity: 1,
-        }),
-      });
-      loadData();
-    } catch (e) {
-      console.error("Chyba při přidání kusu:", e);
-    }
-  };
-
-  // Ubrání 1 ks z vydaného účtu
-  const handleDecreaseServedItem = async (e: React.MouseEvent, item: OrderItem) => {
-    e.stopPropagation();
-    try {
-      await fetch(`/api/order-items/${item.id}/remove`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quantity: 1 }),
-      });
-      loadData();
-    } catch (e) {
-      console.error("Chyba při odebírání:", e);
-    }
-  };
-
-  // Vymazání celého stolu
-  const handleClearWholeTable = async () => {
-    if (rawItems.length === 0) return;
-    if (!window.confirm("Opravdu smazat všechny položky z tohoto stolu?")) return;
-
-    try {
-      await fetch(`/api/tables/${tableId}/clear`, {
-        method: "POST",
-      });
-      loadData();
-    } catch (e) {
-      console.error("Chyba při mazání stolu:", e);
-    }
-  };
-
-  // Uložení poznámky
-  const handleSaveNote = async () => {
-    if (!noteItem) return;
-    try {
-      await fetch(`/api/kitchen/items/${noteItem.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ note: noteText }),
-      });
-      setNoteItem(null);
-      loadData();
-    } catch (e) {
-      console.error("Chyba při ukládání poznámky:", e);
-    }
-  };
-
-  // Součty
+  // Celková hodnota stolu
   const totalAccountSum = useMemo(() => {
-    return rawItems.reduce((acc, i) => acc + i.unitPrice * i.quantity, 0);
-  }, [rawItems]);
+    return servedItems.reduce((acc, i) => acc + i.unitPrice * i.quantity, 0);
+  }, [servedItems]);
 
+  // Hodnota vybraných položek při dělení účtu
   const splitSum = useMemo(() => {
-    return rawItems.reduce((acc, i) => {
-      const qty = splitSelected[i.id] || 0;
-      return acc + i.unitPrice * qty;
+    return Object.entries(splitSelected).reduce((acc, [id, qty]) => {
+      const item = servedItems.find((i) => i.id === Number(id));
+      return acc + (item ? item.unitPrice * qty : 0);
     }, 0);
-  }, [rawItems, splitSelected]);
+  }, [splitSelected, servedItems]);
 
   const currentPayAmount = splitMode ? splitSum : totalAccountSum;
 
-  // Platba
+  const handleToggleSplitSelect = (itemId: number, maxQty: number) => {
+    setSplitSelected((prev) => {
+      const current = prev[itemId] || 0;
+      if (current >= maxQty) {
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      }
+      return { ...prev, [itemId]: current + 1 };
+    });
+  };
+
+  // Potvrzení a tisk platby
   const handleConfirmPayment = async (method: "CASH" | "CARD") => {
     if (currentPayAmount <= 0) return;
     setIsPaying(true);
@@ -350,16 +221,16 @@ export default function TableDetailPage() {
       });
 
       if (res.ok) {
-        // Tisk účtenky: pokud jsme dělili, vytiskneme pouze vybrané kusy!
+        // Tiskne přesně ty kusy, které se platí
         const itemsToPrint = splitMode
-          ? rawItems
+          ? servedItems
               .filter((i) => (splitSelected[i.id] || 0) > 0)
               .map((i) => ({
                 name: i.productName,
                 quantity: splitSelected[i.id],
                 unitPrice: i.unitPrice,
               }))
-          : rawItems.map((i) => ({
+          : servedItems.map((i) => ({
               name: i.productName,
               quantity: i.quantity,
               unitPrice: i.unitPrice,
@@ -380,7 +251,6 @@ export default function TableDetailPage() {
         if (wasFullPay) {
           router.push(mapBackUrl);
         } else {
-          // Zůstáváme na stole a znovu načteme zbytek neuhrazeného účtu
           await loadData();
         }
       }
@@ -392,403 +262,247 @@ export default function TableDetailPage() {
   };
 
   return (
-    <main className="h-screen w-screen overflow-hidden bg-slate-950 flex flex-col select-none">
-      {/* Horní lišta */}
-      <header className="h-14 bg-slate-900 border-b border-slate-800 px-4 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          {/* Návrat na plánek stolů */}
-          <Link
-            href={mapBackUrl}
-            className="rounded-xl bg-slate-800 hover:bg-slate-700 px-3.5 py-2 text-xs font-bold text-slate-300 transition"
-          >
-            ← Plánek stolů
-          </Link>
-          <div className="flex items-baseline gap-2">
-            <h1 className="text-base font-black text-white tracking-tight">
+    <main className="h-screen max-h-screen bg-slate-100 p-2 sm:p-3 flex flex-col overflow-hidden select-none">
+      <div className="mx-auto w-full max-w-7xl flex flex-col flex-1 min-h-0 space-y-2">
+        {/* Horní lišta */}
+        <header className="flex items-center justify-between gap-2 bg-white px-3.5 py-2 rounded-2xl border border-slate-200 shadow-xs shrink-0">
+          <div className="flex items-center gap-2">
+            <Link
+              href={mapBackUrl}
+              className="rounded-xl bg-slate-100 hover:bg-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 transition"
+            >
+              ← Zpět
+            </Link>
+            <h1 className="text-lg font-black text-slate-900 tracking-tight">
               {table?.name || `Stůl ${tableId}`}
             </h1>
-            <span className="text-xs font-semibold text-slate-400">
-              ({rawItems.length} položek)
-            </span>
           </div>
-        </div>
 
-        <div className="text-xs font-bold text-slate-400">
-          Hospoda U Šuláků • Pokladna
-        </div>
-      </header>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setSplitMode(!splitMode);
+                setSplitSelected({});
+              }}
+              className={`px-3 py-1.5 rounded-xl font-bold text-xs transition cursor-pointer ${
+                splitMode
+                  ? "bg-amber-500 text-slate-950 shadow-xs"
+                  : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+              }`}
+            >
+              {splitMode ? "Zrušit dělení" : "Rozdělit účet"}
+            </button>
 
-      {/* Dvousloupcový layout */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-        {/* LEVÝ PANEL: ÚČET STOLU */}
-        <section className="w-full md:w-5/12 lg:w-[380px] xl:w-[420px] bg-white border-r border-slate-200 flex flex-col justify-between h-[48vh] md:h-full shrink-0">
-          {/* Lišta nad účtem */}
-          <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
-            <span className="text-xs font-black text-slate-600 uppercase tracking-wider">
-              {splitMode ? "Výběr k úhradě" : "Účet stolu"}
-            </span>
+            <button
+              onClick={() => setIsPayModalOpen(true)}
+              disabled={servedItems.length === 0 || (splitMode && splitSum === 0)}
+              className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-black text-xs transition shadow-xs cursor-pointer"
+            >
+              Zaplatit {currentPayAmount.toLocaleString("cs-CZ")} Kč
+            </button>
+          </div>
+        </header>
 
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setSplitMode(!splitMode);
-                  setSplitSelected({});
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  splitMode
-                    ? "bg-amber-500 text-slate-950 font-black shadow-xs"
-                    : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
-                }`}
-              >
-                {splitMode ? "Zrušit dělení" : "Rozdělit účet"}
-              </button>
-
-              {!splitMode && (
-                <button
-                  type="button"
-                  disabled={rawItems.length === 0}
-                  onClick={handleClearWholeTable}
-                  className="px-2.5 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-red-600 hover:border-red-200 hover:bg-red-50 text-xs font-bold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="Vyprázdnit celý stůl"
-                >
-                  Smazat stůl
-                </button>
-              )}
+        {/* Hlavní layout: vlevo účet, vpravo nabídka */}
+        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-2">
+          {/* LEVÝ SLOUPEC: Účet stolu */}
+          <div className="lg:col-span-5 flex flex-col bg-white rounded-2xl border border-slate-200 shadow-xs p-3 min-h-0">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-2 shrink-0">
+              <span className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                {splitMode ? "Vyber položky k zaplacení" : "Položky na účtu"}
+              </span>
+              <span className="text-xs font-bold text-slate-500">
+                Položek: {servedItems.reduce((acc, i) => acc + i.quantity, 0)}
+              </span>
             </div>
-          </div>
 
-          {/* Seznam položek účtu */}
-          <div className="flex-1 overflow-y-auto p-2 space-y-3">
-            {/* 1. SEKCIE: PRÁVĚ SE PŘIPRAVUJE (ŽLUTÉ POLOŽKY) */}
-            {groupedPendingItems.length > 0 && (
-              <div className="bg-amber-50/80 border border-amber-300 rounded-2xl p-2.5 space-y-2">
-                <div className="flex items-center justify-between px-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-                    <span className="text-[11px] font-black uppercase text-amber-950 tracking-wider">
-                      K výdeji ({groupedPendingItems.reduce((acc, g) => acc + g.totalQty, 0)} ks)
-                    </span>
-                  </div>
-
-                  {groupedPendingItems.reduce((acc, g) => acc + g.totalQty, 0) > 1 && (
-                    <button
-                      type="button"
-                      onClick={handleServeAllPending}
-                      className="text-[11px] font-black bg-amber-500 hover:bg-amber-400 text-slate-950 px-2 py-0.5 rounded-lg transition cursor-pointer"
-                    >
-                      Vydat vše
-                    </button>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  {groupedPendingItems.map((group) => {
-                    const { sampleItem, totalQty, itemIds } = group;
-                    return (
-                      <div
-                        key={`${sampleItem.productId}_${sampleItem.note || ""}`}
-                        onClick={() => handleServeSingleItem(itemIds)}
-                        className="p-2.5 rounded-xl bg-amber-100/90 border border-amber-300 hover:bg-amber-200/90 transition cursor-pointer flex items-center justify-between shadow-2xs active:scale-[0.99]"
-                      >
-                        <div className="flex-1 pr-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-extrabold text-sm text-slate-950 leading-tight">
-                              {sampleItem.productName}
-                            </span>
-                            <span className="bg-amber-500 text-slate-950 font-black text-xs px-2 py-0.5 rounded-md">
-                              {totalQty}×
-                            </span>
-                          </div>
-                          <span className="text-[11px] font-bold text-amber-900 block mt-0.5">
-                            {sampleItem.unitPrice} Kč / ks • Ťukni pro výdej 1 ks
-                          </span>
-                          {sampleItem.note && (
-                            <span className="text-[10px] font-semibold text-amber-950 bg-amber-200/80 px-1.5 py-0.5 rounded mt-1 inline-block">
-                              Poznámka: {sampleItem.note}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={(e) => handleDecreasePendingGroup(e, itemIds)}
-                            className="w-7 h-7 rounded-lg bg-white border border-amber-300 hover:bg-red-100 hover:text-red-700 text-slate-800 font-black text-sm flex items-center justify-center transition cursor-pointer"
-                            title="Odebrat 1 ks z přípravy"
-                          >
-                            −
-                          </button>
-
-                          <span className="bg-amber-500 text-slate-950 font-black px-2 py-1 rounded-lg text-xs shadow-2xs">
-                            +1 vydat
-                          </span>
-
-                          {totalQty > 1 && (
-                            <button
-                              type="button"
-                              onClick={(e) => handleServeGroupAll(e, itemIds)}
-                              className="bg-amber-600 hover:bg-amber-700 text-white font-black px-2 py-1 rounded-lg text-xs shadow-2xs transition cursor-pointer"
-                              title="Vydat všechny kusy tohoto druhu"
-                            >
-                              Vše ({totalQty})
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* 2. SEKCIE: VYDANÉ POLOŽKY (SLOUČENÉ DO JEDNOHO ÚČTU) */}
-            <div className="space-y-1.5">
-              {servedItems.length === 0 && groupedPendingItems.length === 0 ? (
-                <div className="h-40 flex items-center justify-center text-slate-400 text-xs font-bold">
-                  Účet je prázdný. Klikni na položku vpravo pro přidání.
+            {/* Scrollovatelný seznam položek */}
+            <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 min-h-0">
+              {servedItems.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
+                  <span className="text-3xl mb-1">🧾</span>
+                  <span className="text-xs font-bold">Stůl je prázdný</span>
+                  <span className="text-[11px] text-slate-400">Vyberte položku z nabídky vpravo</span>
                 </div>
               ) : (
                 servedItems.map((item) => {
-                  const selectedQty = splitSelected[item.id] || 0;
+                  const isHighlighted = item.productId === highlightedProductId;
+                  const isSplitChosen = (splitSelected[item.id] || 0) > 0;
+
                   return (
                     <div
                       key={item.id}
-                      onClick={() => handleServedItemClick(item)}
-                      className={`p-2.5 rounded-xl border transition cursor-pointer active:scale-[0.99] flex flex-col gap-1 ${
-                        splitMode && selectedQty > 0
+                      onClick={() => {
+                        if (splitMode) {
+                          handleToggleSplitSelect(item.id, item.quantity);
+                        }
+                      }}
+                      className={`p-2.5 rounded-xl border transition-all duration-300 flex items-center justify-between ${
+                        splitMode ? "cursor-pointer" : ""
+                      } ${
+                        isHighlighted
+                          ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-400 scale-[1.01]"
+                          : isSplitChosen
                           ? "border-amber-400 bg-amber-50/70"
-                          : "border-slate-200 bg-slate-50/60 hover:bg-slate-100/80"
+                          : "border-slate-100 bg-slate-50/60 hover:bg-slate-50"
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 pr-2">
-                          <span className="font-bold text-sm text-slate-900 block leading-tight">
+                      <div className="flex items-center gap-2">
+                        {splitMode && (
+                          <span
+                            className={`w-5 h-5 rounded-md flex items-center justify-center text-xs font-black ${
+                              isSplitChosen
+                                ? "bg-amber-500 text-slate-950"
+                                : "bg-slate-200 text-slate-400"
+                            }`}
+                          >
+                            {splitSelected[item.id] || 0}
+                          </span>
+                        )}
+                        <div>
+                          <span className="font-bold text-xs text-slate-800 block">
                             {item.productName}
                           </span>
-                          <span className="text-[11px] font-semibold text-slate-400">
-                            {item.unitPrice} Kč / ks
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          {!splitMode && (
-                            <button
-                              type="button"
-                              onClick={(e) => handleDecreaseServedItem(e, item)}
-                              className="w-7 h-7 rounded-lg bg-white border border-slate-200 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center transition cursor-pointer"
-                              title="Odebrat 1 ks"
-                            >
-                              −
-                            </button>
-                          )}
-
-                          {splitMode ? (
-                            <span className="bg-amber-500 text-slate-950 font-black px-2 py-0.5 rounded-lg text-xs">
-                              {selectedQty} / {item.quantity} ks
-                            </span>
-                          ) : (
-                            <span className="bg-slate-900 text-white font-black px-2.5 py-1 rounded-lg text-xs min-w-[28px] text-center">
-                              {item.quantity}×
-                            </span>
-                          )}
-
-                          {!splitMode && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setNoteItem(item);
-                                setNoteText(item.note || "");
-                              }}
-                              className={`px-1.5 h-7 rounded-lg text-[11px] font-bold border transition cursor-pointer flex items-center justify-center ${
-                                item.note
-                                  ? "bg-amber-500 border-amber-500 text-slate-950"
-                                  : "bg-white border-slate-200 text-slate-500 hover:bg-slate-100"
-                              }`}
-                              title="Poznámka pro kuchyň"
-                            >
-                              Pozn.
-                            </button>
-                          )}
-
-                          <span className="font-black text-sm text-slate-900 w-16 text-right">
-                            {item.unitPrice * (splitMode ? selectedQty : item.quantity)} Kč
+                          <span className="text-[11px] text-slate-400">
+                            {item.quantity}× {item.unitPrice} Kč
                           </span>
                         </div>
                       </div>
 
-                      {item.note && (
-                        <span className="text-[11px] font-semibold text-amber-900 bg-amber-100/80 px-2 py-0.5 rounded border border-amber-200 self-start">
-                          Poznámka: {item.note}
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-xs text-slate-900">
+                          {item.quantity * item.unitPrice} Kč
                         </span>
-                      )}
+
+                        {!splitMode && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveSingleItem(item.id);
+                            }}
+                            className="w-7 h-7 rounded-lg bg-slate-200/70 hover:bg-red-100 hover:text-red-700 text-slate-600 font-black text-xs flex items-center justify-center transition cursor-pointer"
+                          >
+                            -1
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })
               )}
             </div>
+
+            {/* Spodní souhrn účtu */}
+            <div className="border-t border-slate-100 pt-2.5 mt-2 shrink-0 flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-bold text-slate-400 block uppercase">
+                  {splitMode ? "Vybráno k úhradě" : "Celkem k úhradě"}
+                </span>
+                <span className="text-xl font-black text-slate-900">
+                  {currentPayAmount.toLocaleString("cs-CZ")} Kč
+                </span>
+              </div>
+
+              <button
+                onClick={() => setIsPayModalOpen(true)}
+                disabled={servedItems.length === 0 || (splitMode && splitSum === 0)}
+                className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-30 text-white font-black text-xs shadow-xs transition active:scale-95 cursor-pointer"
+              >
+                Zaplatit
+              </button>
+            </div>
           </div>
 
-          {/* SPODNÍ ČÁST ÚČTU */}
-          <div className="p-3 bg-white border-t border-slate-200 space-y-2 shrink-0 shadow-xs">
-            <div className="flex justify-between items-baseline px-1">
-              <span className="text-xs font-black text-slate-500 uppercase tracking-wider">
-                {splitMode ? "Část k úhradě" : "Celkem k úhradě"}
-              </span>
-              <span className="text-2xl font-black text-slate-900">
-                {currentPayAmount} Kč
-              </span>
+          {/* PRAVÝ SLOUPEC: Nabídka produktů a kategorií */}
+          <div className="lg:col-span-7 flex flex-col bg-white rounded-2xl border border-slate-200 shadow-xs p-3 min-h-0">
+            {/* Kategorie */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-2 shrink-0 border-b border-slate-100">
+              {sortedCategories.map((cat) => {
+                const isActive = activeCategory === cat;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setActiveCategory(cat)}
+                    className={`px-3 py-1.5 rounded-xl font-bold text-xs whitespace-nowrap transition cursor-pointer ${
+                      isActive
+                        ? "bg-slate-900 text-white shadow-xs"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                );
+              })}
             </div>
 
-            <button
-              disabled={currentPayAmount <= 0}
-              onClick={() => setIsPayModalOpen(true)}
-              className="w-full py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 text-white disabled:text-slate-400 font-black text-base transition cursor-pointer active:scale-[0.99] flex items-center justify-center gap-2 shadow-sm"
-            >
-              Zaplatit {currentPayAmount} Kč
-            </button>
-          </div>
-        </section>
+            {/* Mřížka položek nabídky */}
+            <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2 pr-1 min-h-0">
+              {displayedProducts.map((p) => {
+                const isJustClicked = p.id === highlightedProductId;
 
-        {/* PRAVÝ PANEL: NABÍDKA PRODUKTŮ */}
-        <section className="flex-1 bg-slate-100 flex flex-col overflow-hidden h-[52vh] md:h-full">
-          <div className="bg-white border-b border-slate-200 p-2 overflow-x-auto flex gap-1.5 shrink-0 no-scrollbar">
-            {sortedCategories.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setActiveCategory(cat)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-black whitespace-nowrap transition cursor-pointer ${
-                  activeCategory === cat
-                    ? "bg-slate-900 text-white shadow-xs"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => handleAddProduct(p)}
+                    className={`p-3 rounded-2xl border text-left flex flex-col justify-between transition-all duration-200 cursor-pointer active:scale-95 min-h-[76px] ${
+                      isJustClicked
+                        ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-400 scale-[1.02]"
+                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className="font-bold text-xs text-slate-800 line-clamp-2 leading-snug">
+                      {p.name}
+                    </span>
+                    <span className="font-black text-xs text-emerald-700 mt-1 block">
+                      {p.price} Kč
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-
-          <div className="flex-1 overflow-y-auto p-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 content-start">
-            {displayedProducts.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => handleAddProduct(p)}
-                className="bg-white hover:border-slate-400 border border-slate-200 rounded-xl p-3 flex flex-col justify-between text-left transition shadow-xs active:scale-95 cursor-pointer min-h-[82px]"
-              >
-                <span className="font-bold text-xs sm:text-sm text-slate-900 leading-snug">
-                  {p.name}
-                </span>
-                <span className="font-black text-sm text-slate-900 self-end mt-1">
-                  {p.price} Kč
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
+        </div>
       </div>
 
-      {/* MODÁL PRO PLATBU */}
+      {/* Platební modal */}
       {isPayModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 text-center animate-in fade-in zoom-in-95 duration-100">
-            <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
-              {splitMode ? "Platba části účtu" : "Platba účtu"}
-            </span>
-
-            <div className="text-4xl sm:text-5xl font-black text-slate-950 my-4 tracking-tight">
-              {currentPayAmount} Kč
-            </div>
-
-            <p className="text-xs font-semibold text-slate-500 mb-6">
-              Vyberte způsob úhrady
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl border border-slate-200 text-center space-y-4">
+            <h3 className="text-lg font-black text-slate-900">Způsob platby</h3>
+            <p className="text-2xl font-black text-emerald-700">
+              {currentPayAmount.toLocaleString("cs-CZ")} Kč
+            </p>
+            <p className="text-xs text-slate-400">
+              {splitMode ? "Částečná úhrada vybraných položek" : "Celý účet stolu"}
             </p>
 
-            <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="grid grid-cols-2 gap-3 pt-2">
               <button
                 disabled={isPaying}
                 onClick={() => handleConfirmPayment("CASH")}
-                className="py-4 px-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-base flex flex-col items-center gap-1 shadow-md shadow-emerald-900/20 transition cursor-pointer disabled:opacity-50"
+                className="py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-sm flex flex-col items-center justify-center gap-1 shadow-xs transition cursor-pointer"
               >
-                <span className="text-3xl">💵</span>
-                <span className="text-lg font-black tracking-tight">Hotovost</span>
-                <span className="text-[11px] text-emerald-100 font-medium">Tisk účtenky</span>
+                <span className="text-xl">💵</span>
+                <span>Hotovost</span>
               </button>
 
               <button
                 disabled={isPaying}
                 onClick={() => handleConfirmPayment("CARD")}
-                className="py-4 px-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-black text-base flex flex-col items-center gap-1 shadow-md shadow-indigo-900/20 transition cursor-pointer disabled:opacity-50"
+                className="py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-black text-sm flex flex-col items-center justify-center gap-1 shadow-xs transition cursor-pointer"
               >
-                <span className="text-3xl">💳</span>
-                <span className="text-lg font-black tracking-tight">Karta</span>
-                <span className="text-[11px] text-indigo-100 font-medium">Terminál</span>
+                <span className="text-xl">💳</span>
+                <span>Karta</span>
               </button>
             </div>
 
             <button
               onClick={() => setIsPayModalOpen(false)}
+              disabled={isPaying}
               className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs transition cursor-pointer"
             >
-              Zpět k účtu
+              Zrušit
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* MODÁL PRO POZNÁMKU K JÍDLU */}
-      {noteItem && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-3">
-            <div>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
-                Poznámka k jídlu do kuchyně
-              </span>
-              <h3 className="text-base font-black text-slate-900">
-                {noteItem.productName}
-              </h3>
-            </div>
-
-            <div className="flex flex-wrap gap-1.5">
-              {QUICK_NOTES.map((qn) => (
-                <button
-                  key={qn}
-                  type="button"
-                  onClick={() => setNoteText(qn)}
-                  className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-xs text-slate-700 transition cursor-pointer"
-                >
-                  {qn}
-                </button>
-              ))}
-            </div>
-
-            <textarea
-              value={noteText}
-              onChange={(e) => setNoteText(e.target.value)}
-              placeholder="Vlastní poznámka..."
-              rows={2}
-              className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-900 outline-none focus:border-slate-800"
-              autoFocus
-            />
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setNoteItem(null)}
-                className="flex-1 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs transition cursor-pointer"
-              >
-                Zrušit
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveNote}
-                className="flex-1 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer"
-              >
-                Uložit
-              </button>
-            </div>
           </div>
         </div>
       )}
