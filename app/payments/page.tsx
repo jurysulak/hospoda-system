@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { printReceiptViaRawBT } from "@/lib/printReceipt";
 
 type PaymentRecord = {
   id: number;
   amount: number;
   paymentMethod: string;
   createdAt: string;
+  receiptNumber?: string | null;
   order: {
     id: number;
     table: {
@@ -86,11 +88,31 @@ export default function PaymentsPage() {
     }
   };
 
+  // Vytištění kopie účtenky
+  const handlePrintCopy = (payment: PaymentRecord) => {
+    const tableName = payment.order?.table?.name || "Účet";
+    const items =
+      payment.order?.items?.map((i) => ({
+        name: i.productName,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+      })) || [];
+
+    printReceiptViaRawBT({
+      receiptNumber: payment.receiptNumber || payment.id,
+      tableName,
+      items,
+      totalAmount: payment.amount,
+      paymentMethod: payment.paymentMethod?.toUpperCase() === "CARD" ? "CARD" : "CASH",
+      isDuplicate: true,
+      paymentDate: new Date(payment.createdAt),
+    });
+  };
+
   return (
     <main className="min-h-screen bg-slate-100 p-4 sm:p-6 select-none">
       <div className="mx-auto max-w-5xl space-y-5">
-        
-        {/* Horní hlavička bez tržeb */}
+        {/* Horní hlavička */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Link
@@ -168,13 +190,28 @@ export default function PaymentsPage() {
                           {p.amount} Kč
                         </td>
                         <td className="px-5 py-3.5 text-right">
-                          <button
-                            onClick={() => handleRefund(p)}
-                            disabled={isRefunding === p.id}
-                            className="rounded-xl border border-red-300 bg-red-50 hover:bg-red-100 px-3 py-1.5 text-xs font-black text-red-700 transition active:scale-95 cursor-pointer disabled:opacity-50"
-                          >
-                            {isRefunding === p.id ? "Stornuji..." : "⚠️ Stornovat"}
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            {/* Tlačítko pro tisk kopie */}
+                            <button
+                              type="button"
+                              onClick={() => handlePrintCopy(p)}
+                              className="rounded-xl border border-slate-300 bg-white hover:bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700 transition active:scale-95 cursor-pointer shadow-2xs flex items-center gap-1"
+                              title="Vytisknout kopii účtenky"
+                            >
+                              <span>🖨️</span>
+                              <span>Kopie</span>
+                            </button>
+
+                            {/* Původní tlačítko storno */}
+                            <button
+                              type="button"
+                              onClick={() => handleRefund(p)}
+                              disabled={isRefunding === p.id}
+                              className="rounded-xl border border-red-300 bg-red-50 hover:bg-red-100 px-3 py-1.5 text-xs font-black text-red-700 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                            >
+                              {isRefunding === p.id ? "Stornuji..." : "⚠️ Stornovat"}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -184,7 +221,6 @@ export default function PaymentsPage() {
             </div>
           )}
         </div>
-
       </div>
     </main>
   );
