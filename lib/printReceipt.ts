@@ -12,13 +12,14 @@ interface PrintReceiptParams {
   items: PrintItem[];
   totalAmount: number;
   paymentMethod: "CASH" | "CARD";
+  isDuplicate?: boolean;    // <-- Přidáno: označení kopie
+  paymentDate?: Date;       // <-- Přidáno: zachování původního času platby
 }
 
 function stripAccents(str: string): string {
   return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
-// 48 znaků = přesná plná šířka pro 80mm tiskárnu Font A
 const LINE_WIDTH = 48;
 
 const center = (text: string) => {
@@ -27,7 +28,6 @@ const center = (text: string) => {
   return " ".repeat(pad) + clean;
 };
 
-// Vycentrování pro dvojnásobně široké písmo (24 znaků na řádek)
 const centerDouble = (text: string) => {
   const clean = stripAccents(text);
   const pad = Math.max(0, Math.floor((24 - clean.length) / 2));
@@ -44,70 +44,74 @@ const justify = (left: string, right: string) => {
 const divider = "-".repeat(LINE_WIDTH);
 const doubleDivider = "=".repeat(LINE_WIDTH);
 
-// Běžná účtenka za stůl
 export function printReceiptViaRawBT({
   receiptNumber,
   tableName,
   items,
   totalAmount,
   paymentMethod,
+  isDuplicate = false,
+  paymentDate,
 }: PrintReceiptParams) {
-  const now = new Date();
-  const dateStr = now.toLocaleDateString("cs-CZ");
-  const timeStr = now.toLocaleTimeString("cs-CZ", {
+  const dateObj = paymentDate ? new Date(paymentDate) : new Date();
+  const dateStr = dateObj.toLocaleDateString("cs-CZ");
+  const timeStr = dateObj.toLocaleTimeString("cs-CZ", {
     hour: "2-digit",
     minute: "2-digit",
   });
 
   const receiptNumStr =
     receiptNumber ||
-    `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(
-      now.getDate()
-    ).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(
-      now.getMinutes()
+    `${dateObj.getFullYear()}${String(dateObj.getMonth() + 1).padStart(2, "0")}${String(
+      dateObj.getDate()
+    ).padStart(2, "0")}-${String(dateObj.getHours()).padStart(2, "0")}${String(
+      dateObj.getMinutes()
     ).padStart(2, "0")}`;
 
-  // ESC/POS kódy:
-  // \x1b!\x30 = Velké písmo (Double Height + Double Width)
-  // \x1b!\x00 = Normální písmo (standardní šířka 48 znaků)
-  // \x1b!\x08 = Tučné standardní písmo
   const lines: string[] = [
     "\x1b!\x30" + centerDouble("HOSPODA U ŠULÁKŮ"),
     "\x1b!\x00" + center("PEKAŘSKÁ 349/99"),
     center("747 05 OPAVA"),
-    center("ICO: 73174475"),
+    center("IČO: 73174475"),
     divider,
-    justify(`Č. UČTENKY: ${receiptNumStr}`, ""),
-    justify(`Stůl: ${tableName}`, `${dateStr} ${timeStr}`),
-    doubleDivider,
   ];
 
-  items.forEach((item) => {
-    const itemTotal = `${item.quantity * item.unitPrice} Kč`;
-    const itemQty = `${item.quantity}x ${item.unitPrice} Kč`;
+  if (isDuplicate) {
+    lines.push("\x1b!\x08" + center("*** KOPIE ÚČTENKY / ODPIS ***") + "\x1b!\x00");
+    lines.push(divider);
+  }
 
-    lines.push(stripAccents(item.name));
-    lines.push(justify(`   ${itemQty}`, itemTotal));
-  });
+  lines.push(justify(`Č. ÚČTENKY: ${receiptNumStr}`, ""));
+  lines.push(justify(`Stůl: ${tableName}`, `${dateStr} ${timeStr}`));
+  lines.push(doubleDivider);
+
+  if (items && items.length > 0) {
+    items.forEach((item) => {
+      const itemTotal = `${item.quantity * item.unitPrice} Kč`;
+      const itemQty = `${item.quantity}x ${item.unitPrice} Kč`;
+
+      lines.push(stripAccents(item.name));
+      lines.push(justify(`  ${itemQty}`, itemTotal));
+    });
+  } else {
+    lines.push(justify("Konzumace / platba", `${totalAmount} Kč`));
+  }
 
   lines.push(divider);
   lines.push(
     "\x1b!\x08" +
-      justify(
-        "CELKEM CZK:",
-        `${totalAmount.toLocaleString("cs-CZ")} Kč`
-      ) +
+      justify("CELKEM CZK:", `${totalAmount.toLocaleString("cs-CZ")} Kč`) +
       "\x1b!\x00"
   );
   lines.push(
     justify(
       "Způsob úhrady:",
-      paymentMethod === "CASH" ? "HOTOVOST" : "KARTA"
+      paymentMethod?.toUpperCase() === "CARD" ? "KARTA" : "HOTOVOST"
     )
   );
   lines.push(doubleDivider);
   lines.push(center("********* DĚKUJEME VÁM *********"));
-  lines.push("\x1d\x56\x00"); // Příkaz ESC/POS pro okamžitý odstřih bez čekání
+  lines.push("\x1d\x56\x00"); // Příkaz ESC/POS pro okamžitý odstřih
 
   const rawText = lines.join("\n");
   window.location.href = `rawbt:${encodeURIComponent(rawText)}`;
@@ -142,7 +146,7 @@ export function printDailySummaryViaRawBT(summary: SummaryPrintParams) {
     justify("Počet plateb:", String(summary.paymentCount)),
     divider,
     "\x1b!\x08" +
-      justify("CELKOVA TRŽBA:", `${summary.totalAmount.toLocaleString("cs-CZ")} Kč`) +
+      justify("CELKOVÁ TRŽBA:", `${summary.totalAmount.toLocaleString("cs-CZ")} Kč`) +
       "\x1b!\x00",
   ];
 
@@ -150,7 +154,7 @@ export function printDailySummaryViaRawBT(summary: SummaryPrintParams) {
     lines.push(justify(" - Hotovost:", `${summary.cashAmount.toLocaleString("cs-CZ")} Kč`));
   }
   if (summary.cardAmount !== undefined) {
-    lines.push(justify(" - Platebni karty:", `${summary.cardAmount.toLocaleString("cs-CZ")} Kč`));
+    lines.push(justify(" - Platební karty:", `${summary.cardAmount.toLocaleString("cs-CZ")} Kč`));
   }
 
   if (summary.byProduct && summary.byProduct.length > 0) {
@@ -159,13 +163,13 @@ export function printDailySummaryViaRawBT(summary: SummaryPrintParams) {
     lines.push(divider);
     summary.byProduct.forEach((p) => {
       lines.push(stripAccents(p.productName));
-      lines.push(justify(`   ${p.totalQuantity} ks`, `${p.totalAmount.toLocaleString("cs-CZ")} Kč`));
+      lines.push(justify(`  ${p.totalQuantity} ks`, `${p.totalAmount.toLocaleString("cs-CZ")} Kč`));
     });
   }
 
   lines.push(doubleDivider);
   lines.push(center("Konec denního souhrnu"));
-  lines.push("\x1d\x56\x00"); // Příkaz ESC/POS pro okamžitý odstřih bez čekání
+  lines.push("\x1d\x56\x00");
 
   const rawText = lines.join("\n");
   window.location.href = `rawbt:${encodeURIComponent(rawText)}`;

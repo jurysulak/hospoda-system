@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { printDailySummaryViaRawBT } from "@/lib/printReceipt";
+import { printDailySummaryViaRawBT, printReceiptViaRawBT } from "@/lib/printReceipt";
 
 interface PaymentItem {
   id: number;
@@ -11,6 +11,11 @@ interface PaymentItem {
   tableName: string;
   time: string;
   receiptNumber: string | null;
+  items?: Array<{
+    productName: string;
+    unitPrice: number;
+    quantity: number;
+  }>;
 }
 
 interface DayData {
@@ -44,17 +49,6 @@ export default function SummaryPage() {
   const [data, setData] = useState<CalendarResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedDayDetail, setSelectedDayDetail] = useState<DayData | null>(null);
-
-  const handlePinSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (pin === "1234") {
-      setIsAuthorized(true);
-      setPinError(false);
-    } else {
-      setPinError(true);
-      setPin("");
-    }
-  };
 
   const loadCalendar = async (year: number, month: number) => {
     setLoading(true);
@@ -114,6 +108,34 @@ export default function SummaryPage() {
     });
   };
 
+  // Tisk kopie konkrétní účtenky z historie
+  const handlePrintReceiptCopy = (payment: PaymentItem, dayDate: string) => {
+    const items =
+      payment.items && payment.items.length > 0
+        ? payment.items.map((i) => ({
+            name: i.productName,
+            quantity: i.quantity,
+            unitPrice: i.unitPrice,
+          }))
+        : [];
+
+    const [hours, minutes] = payment.time.split(":");
+    const paymentDateTime = new Date(dayDate);
+    if (hours && minutes) {
+      paymentDateTime.setHours(Number(hours), Number(minutes));
+    }
+
+    printReceiptViaRawBT({
+      receiptNumber: payment.receiptNumber || payment.id,
+      tableName: payment.tableName || "Účet",
+      items,
+      totalAmount: payment.amount,
+      paymentMethod: payment.method?.toUpperCase() === "CARD" ? "CARD" : "CASH",
+      isDuplicate: true,
+      paymentDate: paymentDateTime,
+    });
+  };
+
   const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
   const firstDayOfWeek = (new Date(selectedYear, selectedMonth - 1, 1).getDay() + 6) % 7;
 
@@ -128,7 +150,6 @@ export default function SummaryPage() {
       const nextPin = pin + digit;
       setPin(nextPin);
       setPinError(false);
-      // Pokud zadáš 4. číslo, automaticky zkontroluje
       if (nextPin.length === 4) {
         if (nextPin === "1234") {
           setIsAuthorized(true);
@@ -145,6 +166,7 @@ export default function SummaryPage() {
     setPinError(false);
   };
 
+  // 1. PIN OBRAZOVKA
   if (!isAuthorized) {
     return (
       <main className="min-h-screen bg-slate-900 flex items-center justify-center p-4 select-none">
@@ -220,6 +242,7 @@ export default function SummaryPage() {
     );
   }
 
+  // 2. KALENDÁŘ A PŘEHLEDY
   return (
     <main className="min-h-screen bg-slate-100 p-3 sm:p-6 select-none">
       <div className="mx-auto max-w-6xl space-y-4">
@@ -337,15 +360,17 @@ export default function SummaryPage() {
                     }`}
                   >
                     <span className="text-xs font-black text-slate-800">{dayNum}</span>
-                    {dayInfo && (
+                    {dayInfo ? (
                       <div>
-                        <span className="text-xs font-black text-emerald-700 block leading-tight">
-                          {dayInfo.total.toLocaleString("cs-CZ")} Kč
+                        <span className="text-[11px] font-black text-slate-900 block leading-tight">
+                          {dayInfo.total.toLocaleString("cs-CZ")}
                         </span>
-                        <span className="text-[10px] text-slate-400 block font-semibold">
+                        <span className="text-[9px] text-slate-400 font-bold block">
                           {dayInfo.count} účtů
                         </span>
                       </div>
+                    ) : (
+                      <span className="text-[10px] text-slate-300 font-medium">-</span>
                     )}
                   </button>
                 );
@@ -353,70 +378,96 @@ export default function SummaryPage() {
             </div>
           </div>
 
-          {/* Detail dne a tlačítko tisku */}
-          <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
+          {/* Detail vybraného dne */}
+          <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-xs flex flex-col min-h-[400px]">
             {selectedDayDetail ? (
-              <div className="space-y-4">
+              <div className="flex-1 flex flex-col space-y-3">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <div>
-                    <h3 className="text-base font-black text-slate-900">
-                      Denní detail ({new Date(selectedDayDetail.date).toLocaleDateString("cs-CZ")})
-                    </h3>
-                    <p className="text-xs text-slate-500 font-medium">
-                      Celkem {selectedDayDetail.count} uzavřených plateb
-                    </p>
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                      Detail dne
+                    </span>
+                    <h2 className="text-lg font-black text-slate-900">
+                      {selectedDayDetail.day}. {monthNames[selectedMonth - 1]}
+                    </h2>
                   </div>
+
                   <button
                     onClick={() => handlePrintDailySummary(selectedDayDetail)}
-                    className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition active:scale-95 cursor-pointer"
+                    className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                    title="Vytisknout denní uzávěrku"
                   >
-                    🖨️ Tisknout uzávěrku
+                    <span>🖨️</span>
+                    <span>Denní uzávěrka</span>
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                {/* Rozpad dne */}
+                <div className="grid grid-cols-2 gap-2 text-center">
                   <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                    <span className="text-slate-500 block">Celkem den:</span>
-                    <span className="text-base font-black text-emerald-700">
-                      {selectedDayDetail.total.toLocaleString("cs-CZ")} Kč
+                    <span className="text-[10px] font-bold text-slate-400 block uppercase">
+                      Hotovost
+                    </span>
+                    <span className="text-sm font-black text-emerald-700">
+                      {selectedDayDetail.cash.toLocaleString("cs-CZ")} Kč
                     </span>
                   </div>
                   <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                    <span className="text-slate-500 block">Hotovost / Karta:</span>
-                    <span className="text-xs font-bold text-slate-800 block mt-0.5">
-                      💵 {selectedDayDetail.cash} Kč
+                    <span className="text-[10px] font-bold text-slate-400 block uppercase">
+                      Karta
                     </span>
-                    <span className="text-xs font-bold text-slate-800 block">
-                      💳 {selectedDayDetail.card} Kč
+                    <span className="text-sm font-black text-blue-700">
+                      {selectedDayDetail.card.toLocaleString("cs-CZ")} Kč
                     </span>
                   </div>
                 </div>
 
-                {/* Seznam účtů daného dne */}
-                <div className="space-y-1.5 max-h-[340px] overflow-y-auto pr-1">
-                  <span className="text-[11px] font-black uppercase text-slate-400 block tracking-wider mb-1">
-                    Seznam plateb dne:
+                {/* Seznam plateb s tlačítkem pro tisk kopie */}
+                <div className="flex-1 overflow-y-auto space-y-1.5 max-h-[300px] pr-1">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">
+                    Platby za den ({selectedDayDetail.payments.length})
                   </span>
+
                   {selectedDayDetail.payments.map((p) => (
                     <div
                       key={p.id}
-                      className="p-2 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs"
+                      className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/80 flex items-center justify-between"
                     >
                       <div>
-                        <span className="font-bold text-slate-800">{p.tableName}</span>
-                        <span className="text-[10px] text-slate-400 block">
-                          {p.time} • {p.method === "CASH" ? "Hotovost" : "Karta"}
+                        <span className="font-bold text-xs text-slate-800 block">
+                          {p.tableName}
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          {p.time} • {p.method?.toUpperCase() === "CARD" ? "Karta" : "Hotovost"}
                         </span>
                       </div>
-                      <span className="font-black text-slate-900">{p.amount} Kč</span>
+
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-xs text-slate-900">
+                          {p.amount.toLocaleString("cs-CZ")} Kč
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => handlePrintReceiptCopy(p, selectedDayDetail.date)}
+                          className="px-2 py-1 rounded-lg bg-white hover:bg-slate-200 active:scale-95 text-slate-700 font-bold text-[11px] flex items-center gap-1 border border-slate-200 transition cursor-pointer shadow-2xs"
+                          title="Vytisknout kopii účtenky"
+                        >
+                          <span>🖨️</span>
+                          <span>Kopie</span>
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             ) : (
-              <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
-                <span className="text-3xl mb-2">📋</span>
-                <span className="text-xs font-bold">Vyber den v kalendáři pro zobrazení a tisk detailu</span>
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-slate-400">
+                <span className="text-3xl mb-1">📅</span>
+                <span className="text-xs font-bold">Vyber den v kalendáři</span>
+                <span className="text-[11px] text-slate-400 mt-1">
+                  Kliknutím na den se zobrazí podrobný rozpis plateb
+                </span>
               </div>
             )}
           </div>
