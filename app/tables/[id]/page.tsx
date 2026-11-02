@@ -129,7 +129,7 @@ export default function TableDetailPage() {
     });
   }, [products, activeCategory]);
 
-  // Přidání produktu (přes nabídku nebo kliknutím na položku na stole)
+  // Přidání produktu
   const handleAddProductById = async (productId: number) => {
     setHighlightedProductId(productId);
     setTimeout(() => {
@@ -260,55 +260,39 @@ export default function TableDetailPage() {
     <main className="h-screen max-h-screen bg-slate-100 p-2 sm:p-3 flex flex-col overflow-hidden select-none">
       <div className="mx-auto w-full max-w-7xl flex flex-col flex-1 min-h-0 space-y-2">
         {/* Horní lišta */}
-        <header className="flex items-center justify-between gap-2 bg-white px-3.5 py-2 rounded-2xl border border-slate-200 shadow-xs shrink-0">
-          <div className="flex items-center gap-2">
+        <header className="flex items-center justify-between gap-2 bg-white px-3.5 py-2.5 rounded-2xl border border-slate-200 shadow-xs shrink-0">
+          <div className="flex items-center gap-3">
             <Link
               href={mapBackUrl}
-              className="rounded-xl bg-slate-100 hover:bg-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 transition"
+              className="rounded-xl bg-slate-100 hover:bg-slate-200 px-3.5 py-2 text-xs font-bold text-slate-700 transition active:scale-95"
             >
               ← Zpět
             </Link>
-            <h1 className="text-lg font-black text-slate-900 tracking-tight">
+            <h1 className="text-xl font-black text-slate-900 tracking-tight">
               {table?.name || `Stůl ${tableId}`}
             </h1>
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setSplitMode(!splitMode);
-                setSplitSelected({});
-              }}
-              className={`px-3 py-1.5 rounded-xl font-bold text-xs transition cursor-pointer ${
-                splitMode
-                  ? "bg-amber-500 text-slate-950 shadow-xs"
-                  : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-              }`}
-            >
-              {splitMode ? "Zrušit dělení" : "Rozdělit účet"}
-            </button>
-
-            <button
-              onClick={() => setIsPayModalOpen(true)}
-              disabled={servedItems.length === 0 || (splitMode && splitSum === 0)}
-              className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-black text-xs transition shadow-xs cursor-pointer"
-            >
-              Zaplatit {currentPayAmount.toLocaleString("cs-CZ")} Kč
-            </button>
+            <span className="text-xs font-black text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200/60">
+              Položek: {servedItems.reduce((acc, i) => acc + i.quantity, 0)}
+            </span>
           </div>
         </header>
 
-        {/* Hlavní layout */}
+        {/* Hlavní layout: vlevo účet, vpravo nabídka */}
         <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-2">
           {/* LEVÝ SLOUPEC: Účet stolu */}
           <div className="lg:col-span-5 flex flex-col bg-white rounded-2xl border border-slate-200 shadow-xs p-3 min-h-0">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-2 shrink-0">
               <span className="text-xs font-black uppercase text-slate-400 tracking-wider">
-                {splitMode ? "Vyber položky k zaplacení" : "Položky na účtu"}
+                {splitMode ? "Vyber položky k zaplacení" : "Položky na účtu (klik = +1)"}
               </span>
-              <span className="text-xs font-black text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
-                Celkem kusů: {servedItems.reduce((acc, i) => acc + i.quantity, 0)}
-              </span>
+              {splitMode && (
+                <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                  Dělení aktivní
+                </span>
+              )}
             </div>
 
             {/* Scrollovatelný seznam položek */}
@@ -343,7 +327,6 @@ export default function TableDetailPage() {
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        {/* Zvýrazněný počet kusů */}
                         {splitMode ? (
                           <span
                             className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black shrink-0 ${
@@ -408,25 +391,59 @@ export default function TableDetailPage() {
               )}
             </div>
 
-            {/* Trvale viditelný spodní souhrn účtu */}
-            <div className="border-t-2 border-slate-200/80 pt-3 mt-2 shrink-0 bg-white flex items-center justify-between gap-3">
-              <div>
-                <span className="text-[10px] font-black text-slate-400 block uppercase tracking-wider">
-                  {splitMode ? "K úhradě (vybráno)" : "Celkem k úhradě"}
-                </span>
-                <span className="text-2xl font-black text-slate-950 tracking-tight">
-                  {currentPayAmount.toLocaleString("cs-CZ")} Kč
-                </span>
+            {/* Trvale viditelný spodní panel: Rozdělit účet + Zaplatit */}
+            <div className="border-t-2 border-slate-200/80 pt-3 mt-2 shrink-0 bg-white space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black text-slate-400 block uppercase tracking-wider">
+                    {splitMode ? "Vybráno k platbě" : "Celkem k úhradě"}
+                  </span>
+                  <span className="text-2xl font-black text-slate-950 tracking-tight">
+                    {currentPayAmount.toLocaleString("cs-CZ")} Kč
+                  </span>
+                </div>
+
+                {splitMode && (
+                  <div className="text-right">
+                    <span className="text-[10px] font-bold text-slate-400 block uppercase">
+                      Celý stůl
+                    </span>
+                    <span className="text-xs font-bold text-slate-500">
+                      {totalAccountSum.toLocaleString("cs-CZ")} Kč
+                    </span>
+                  </div>
+                )}
               </div>
 
-              <button
-                onClick={() => setIsPayModalOpen(true)}
-                disabled={servedItems.length === 0 || (splitMode && splitSum === 0)}
-                className="px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 disabled:bg-slate-400 text-white font-black text-sm shadow-md transition active:scale-95 cursor-pointer flex items-center gap-2"
-              >
-                <span>Zaplatit</span>
-                <span>→</span>
-              </button>
+              {/* Dvě velká dotyková tlačítka vedle sebe */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSplitMode(!splitMode);
+                    setSplitSelected({});
+                  }}
+                  disabled={servedItems.length === 0}
+                  className={`py-3 px-3 rounded-2xl font-black text-sm flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer disabled:opacity-30 ${
+                    splitMode
+                      ? "bg-amber-500 hover:bg-amber-400 text-slate-950 border-2 border-amber-600 shadow-xs"
+                      : "bg-slate-100 hover:bg-slate-200 text-slate-800 border-2 border-slate-200"
+                  }`}
+                >
+                  <span className="text-base">{splitMode ? "✕" : "✂️"}</span>
+                  <span>{splitMode ? "Zrušit" : "Rozdělit"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsPayModalOpen(true)}
+                  disabled={servedItems.length === 0 || (splitMode && splitSum === 0)}
+                  className="py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 disabled:bg-slate-400 text-white font-black text-sm shadow-md transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <span>Zaplatit</span>
+                  <span>→</span>
+                </button>
+              </div>
             </div>
           </div>
 
