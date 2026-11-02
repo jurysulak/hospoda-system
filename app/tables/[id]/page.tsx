@@ -100,11 +100,7 @@ export default function TableDetailPage() {
 
   const currentOrder = table?.orders?.[0] || null;
   const rawItems = currentOrder?.items || [];
-
-  // Všechny položky jdou rovnou na účet
-  const servedItems = useMemo(() => {
-    return rawItems;
-  }, [rawItems]);
+  const servedItems = useMemo(() => rawItems, [rawItems]);
 
   // Seřazení kategorií
   const sortedCategories = useMemo(() => {
@@ -133,9 +129,9 @@ export default function TableDetailPage() {
     });
   }, [products, activeCategory]);
 
-  // Přidání produktu s 1s animací zvýraznění
-  const handleAddProduct = async (product: Product) => {
-    setHighlightedProductId(product.id);
+  // Přidání produktu (přes nabídku nebo kliknutím na položku na stole)
+  const handleAddProductById = async (productId: number) => {
+    setHighlightedProductId(productId);
     setTimeout(() => {
       setHighlightedProductId(null);
     }, 1000);
@@ -144,7 +140,7 @@ export default function TableDetailPage() {
       const res = await fetch(`/api/tables/${tableId}/items`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: product.id, quantity: 1 }),
+        body: JSON.stringify({ productId, quantity: 1 }),
       });
       if (res.ok) {
         await loadData();
@@ -221,7 +217,6 @@ export default function TableDetailPage() {
       });
 
       if (res.ok) {
-        // Tiskne přesně ty kusy, které se platí
         const itemsToPrint = splitMode
           ? servedItems
               .filter((i) => (splitSelected[i.id] || 0) > 0)
@@ -303,20 +298,20 @@ export default function TableDetailPage() {
           </div>
         </header>
 
-        {/* Hlavní layout: vlevo účet, vpravo nabídka */}
+        {/* Hlavní layout */}
         <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-2">
           {/* LEVÝ SLOUPEC: Účet stolu */}
           <div className="lg:col-span-5 flex flex-col bg-white rounded-2xl border border-slate-200 shadow-xs p-3 min-h-0">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-2 shrink-0">
               <span className="text-xs font-black uppercase text-slate-400 tracking-wider">
-                {splitMode ? "Vyber položky k zaplacení" : "Položky na účtu"}
+                {splitMode ? "Vyber položky k zaplacení" : "Položky na účtu (klik = +1)"}
               </span>
               <span className="text-xs font-bold text-slate-500">
                 Položek: {servedItems.reduce((acc, i) => acc + i.quantity, 0)}
               </span>
             </div>
 
-            {/* Scrollovatelný seznam položek */}
+            {/* Seznam položek účtu */}
             <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 min-h-0">
               {servedItems.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
@@ -335,16 +330,17 @@ export default function TableDetailPage() {
                       onClick={() => {
                         if (splitMode) {
                           handleToggleSplitSelect(item.id, item.quantity);
+                        } else {
+                          // Kliknutí přímo na položku na stole přidá další kus
+                          handleAddProductById(item.productId);
                         }
                       }}
-                      className={`p-2.5 rounded-xl border transition-all duration-300 flex items-center justify-between ${
-                        splitMode ? "cursor-pointer" : ""
-                      } ${
+                      className={`p-2.5 rounded-xl border transition-all duration-300 flex items-center justify-between cursor-pointer active:scale-[0.99] ${
                         isHighlighted
                           ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-400 scale-[1.01]"
                           : isSplitChosen
                           ? "border-amber-400 bg-amber-50/70"
-                          : "border-slate-100 bg-slate-50/60 hover:bg-slate-50"
+                          : "border-slate-100 bg-slate-50/70 hover:bg-slate-100/80"
                       }`}
                     >
                       <div className="flex items-center gap-2">
@@ -375,15 +371,30 @@ export default function TableDetailPage() {
                         </span>
 
                         {!splitMode && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveSingleItem(item.id);
-                            }}
-                            className="w-7 h-7 rounded-lg bg-slate-200/70 hover:bg-red-100 hover:text-red-700 text-slate-600 font-black text-xs flex items-center justify-center transition cursor-pointer"
-                          >
-                            -1
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveSingleItem(item.id);
+                              }}
+                              className="w-7 h-7 rounded-lg bg-slate-200/80 hover:bg-red-100 hover:text-red-700 active:scale-95 text-slate-700 font-black text-xs flex items-center justify-center transition cursor-pointer"
+                              title="Odebrat 1 kus"
+                            >
+                              -1
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAddProductById(item.productId);
+                              }}
+                              className="w-7 h-7 rounded-lg bg-emerald-100 hover:bg-emerald-200 active:scale-95 text-emerald-800 font-black text-xs flex items-center justify-center transition cursor-pointer"
+                              title="Přidat 1 kus"
+                            >
+                              +1
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -443,7 +454,7 @@ export default function TableDetailPage() {
                 return (
                   <button
                     key={p.id}
-                    onClick={() => handleAddProduct(p)}
+                    onClick={() => handleAddProductById(p.id)}
                     className={`p-3 rounded-2xl border text-left flex flex-col justify-between transition-all duration-200 cursor-pointer active:scale-95 min-h-[76px] ${
                       isJustClicked
                         ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-400 scale-[1.02]"
