@@ -304,14 +304,14 @@ export default function TableDetailPage() {
           <div className="lg:col-span-5 flex flex-col bg-white rounded-2xl border border-slate-200 shadow-xs p-3 min-h-0">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-2 shrink-0">
               <span className="text-xs font-black uppercase text-slate-400 tracking-wider">
-                {splitMode ? "Vyber položky k zaplacení" : "Položky na účtu (klik = +1)"}
+                {splitMode ? "Vyber položky k zaplacení" : "Položky na účtu"}
               </span>
-              <span className="text-xs font-bold text-slate-500">
-                Položek: {servedItems.reduce((acc, i) => acc + i.quantity, 0)}
+              <span className="text-xs font-black text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                Celkem kusů: {servedItems.reduce((acc, i) => acc + i.quantity, 0)}
               </span>
             </div>
 
-            {/* Seznam položek účtu */}
+            {/* Scrollovatelný seznam položek */}
             <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 min-h-0">
               {servedItems.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
@@ -331,7 +331,6 @@ export default function TableDetailPage() {
                         if (splitMode) {
                           handleToggleSplitSelect(item.id, item.quantity);
                         } else {
-                          // Kliknutí přímo na položku na stole přidá další kus
                           handleAddProductById(item.productId);
                         }
                       }}
@@ -339,34 +338,40 @@ export default function TableDetailPage() {
                         isHighlighted
                           ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-400 scale-[1.01]"
                           : isSplitChosen
-                          ? "border-amber-400 bg-amber-50/70"
-                          : "border-slate-100 bg-slate-50/70 hover:bg-slate-100/80"
+                          ? "border-amber-400 bg-amber-50/80 ring-1 ring-amber-300"
+                          : "border-slate-100 bg-slate-50/70 hover:bg-slate-100/90"
                       }`}
                     >
-                      <div className="flex items-center gap-2">
-                        {splitMode && (
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {/* Zvýrazněný počet kusů */}
+                        {splitMode ? (
                           <span
-                            className={`w-5 h-5 rounded-md flex items-center justify-center text-xs font-black ${
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black shrink-0 ${
                               isSplitChosen
                                 ? "bg-amber-500 text-slate-950"
-                                : "bg-slate-200 text-slate-400"
+                                : "bg-slate-200 text-slate-500"
                             }`}
                           >
                             {splitSelected[item.id] || 0}
                           </span>
+                        ) : (
+                          <span className="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center text-xs font-black shrink-0 shadow-2xs">
+                            {item.quantity}×
+                          </span>
                         )}
-                        <div>
-                          <span className="font-bold text-xs text-slate-800 block">
+
+                        <div className="min-w-0">
+                          <span className="font-bold text-xs text-slate-900 block truncate">
                             {item.productName}
                           </span>
-                          <span className="text-[11px] text-slate-400">
-                            {item.quantity}× {item.unitPrice} Kč
+                          <span className="text-[11px] text-slate-500 font-medium">
+                            {item.unitPrice} Kč / ks
                           </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-xs text-slate-900">
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-black text-sm text-slate-950 tracking-tight">
                           {item.quantity * item.unitPrice} Kč
                         </span>
 
@@ -378,10 +383,10 @@ export default function TableDetailPage() {
                                 e.stopPropagation();
                                 handleRemoveSingleItem(item.id);
                               }}
-                              className="w-7 h-7 rounded-lg bg-slate-200/80 hover:bg-red-100 hover:text-red-700 active:scale-95 text-slate-700 font-black text-xs flex items-center justify-center transition cursor-pointer"
-                              title="Odebrat 1 kus"
+                              className="w-8 h-8 rounded-lg bg-slate-200/90 hover:bg-red-100 hover:text-red-700 active:scale-95 text-slate-700 font-black text-base flex items-center justify-center transition cursor-pointer"
+                              title="Odebrat kus"
                             >
-                              -1
+                              -
                             </button>
                             <button
                               type="button"
@@ -389,10 +394,10 @@ export default function TableDetailPage() {
                                 e.stopPropagation();
                                 handleAddProductById(item.productId);
                               }}
-                              className="w-7 h-7 rounded-lg bg-emerald-100 hover:bg-emerald-200 active:scale-95 text-emerald-800 font-black text-xs flex items-center justify-center transition cursor-pointer"
-                              title="Přidat 1 kus"
+                              className="w-8 h-8 rounded-lg bg-emerald-100 hover:bg-emerald-200 active:scale-95 text-emerald-800 font-black text-base flex items-center justify-center transition cursor-pointer"
+                              title="Přidat kus"
                             >
-                              +1
+                              +
                             </button>
                           </div>
                         )}
@@ -403,13 +408,13 @@ export default function TableDetailPage() {
               )}
             </div>
 
-            {/* Spodní souhrn účtu */}
-            <div className="border-t border-slate-100 pt-2.5 mt-2 shrink-0 flex items-center justify-between">
+            {/* Trvale viditelný spodní souhrn účtu */}
+            <div className="border-t-2 border-slate-200/80 pt-3 mt-2 shrink-0 bg-white flex items-center justify-between gap-3">
               <div>
-                <span className="text-[11px] font-bold text-slate-400 block uppercase">
-                  {splitMode ? "Vybráno k úhradě" : "Celkem k úhradě"}
+                <span className="text-[10px] font-black text-slate-400 block uppercase tracking-wider">
+                  {splitMode ? "K úhradě (vybráno)" : "Celkem k úhradě"}
                 </span>
-                <span className="text-xl font-black text-slate-900">
+                <span className="text-2xl font-black text-slate-950 tracking-tight">
                   {currentPayAmount.toLocaleString("cs-CZ")} Kč
                 </span>
               </div>
@@ -417,9 +422,10 @@ export default function TableDetailPage() {
               <button
                 onClick={() => setIsPayModalOpen(true)}
                 disabled={servedItems.length === 0 || (splitMode && splitSum === 0)}
-                className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-30 text-white font-black text-xs shadow-xs transition active:scale-95 cursor-pointer"
+                className="px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 disabled:bg-slate-400 text-white font-black text-sm shadow-md transition active:scale-95 cursor-pointer flex items-center gap-2"
               >
-                Zaplatit
+                <span>Zaplatit</span>
+                <span>→</span>
               </button>
             </div>
           </div>
