@@ -122,13 +122,22 @@ export default function TableDetailPage() {
       list = list.filter((p) => p.category.trim() === activeCategory);
     }
     return [...list].sort((a, b) => {
-      const pA = CATEGORY_PRIORITY[a.category.toLowerCase()] ?? 99;
-      const pB = CATEGORY_PRIORITY[b.category.toLowerCase()] ?? 99;
-      if (pA !== pB) return pA - pB;
+      // 1. Priorita kategorií (pokud je zvoleno "Vše")
+      if (activeCategory === "Vše") {
+        const pA = CATEGORY_PRIORITY[a.category.toLowerCase()] ?? 99;
+        const pB = CATEGORY_PRIORITY[b.category.toLowerCase()] ?? 99;
+        if (pA !== pB) return pA - pB;
+      }
+      // 2. Ruční pořadí produktu
+      const orderA = (a as any).order ?? 0;
+      const orderB = (b as any).order ?? 0;
+      if (orderA !== orderB) return orderA - orderB;
+
+      // 3. Abeceda jako pojistka
       return a.name.localeCompare(b.name, "cs");
     });
   }, [products, activeCategory]);
-
+  
   // Přidání produktu
   const handleAddProductById = async (productId: number) => {
     setHighlightedProductId(productId);
@@ -198,6 +207,29 @@ export default function TableDetailPage() {
     if (currentPayAmount <= 0) return;
     setIsPaying(true);
 
+    // 1. Připravíme data pro tisk
+    const itemsToPrint = splitMode
+      ? servedItems
+          .filter((i) => (splitSelected[i.id] || 0) > 0)
+          .map((i) => ({
+            name: i.productName,
+            quantity: splitSelected[i.id],
+            unitPrice: i.unitPrice,
+          }))
+      : servedItems.map((i) => ({
+          name: i.productName,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+        }));
+
+    // 2. OKAMŽITÝ TISK: Odešleme do tiskárny hned bez čekání na server!
+    printReceiptViaRawBT({
+      tableName: table?.name || `Stůl ${tableId}`,
+      items: itemsToPrint,
+      totalAmount: currentPayAmount,
+      paymentMethod: method,
+    });
+
     try {
       const splitItemsArray = Object.entries(splitSelected)
         .filter(([_, qty]) => qty > 0)
@@ -210,6 +242,7 @@ export default function TableDetailPage() {
           }
         : { paymentMethod: method };
 
+      // 3. Zápis do databáze běží souběžně
       const res = await fetch(`/api/tables/${tableId}/pay`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -217,27 +250,6 @@ export default function TableDetailPage() {
       });
 
       if (res.ok) {
-        const itemsToPrint = splitMode
-          ? servedItems
-              .filter((i) => (splitSelected[i.id] || 0) > 0)
-              .map((i) => ({
-                name: i.productName,
-                quantity: splitSelected[i.id],
-                unitPrice: i.unitPrice,
-              }))
-          : servedItems.map((i) => ({
-              name: i.productName,
-              quantity: i.quantity,
-              unitPrice: i.unitPrice,
-            }));
-
-        printReceiptViaRawBT({
-          tableName: table?.name || `Stůl ${tableId}`,
-          items: itemsToPrint,
-          totalAmount: currentPayAmount,
-          paymentMethod: method,
-        });
-
         setIsPayModalOpen(false);
         const wasFullPay = !splitMode || splitSum === totalAccountSum;
         setSplitMode(false);

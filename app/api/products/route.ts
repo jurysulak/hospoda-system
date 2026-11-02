@@ -1,3 +1,4 @@
+// app/api/products/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -7,7 +8,11 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const products = await prisma.product.findMany({
-      orderBy: { id: "asc" },
+      where: { isActive: true },
+      orderBy: [
+        { order: "asc" },
+        { name: "asc" },
+      ],
     });
     return NextResponse.json(products);
   } catch (error: any) {
@@ -59,3 +64,11 @@ export async function POST(request: Request) {
     );
   }
 }
+
+const products = await prisma.product.findMany({
+  where: { isActive: true },
+  orderBy: [
+    { order: "asc" },
+    { name: "asc" },
+  ],
+});
