@@ -1,3 +1,4 @@
+// app/api/tables/[id]/pay/route.ts
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -11,7 +12,10 @@ export async function POST(
     const { id } = await params;
     const tableId = Number(id);
     const body = await req.json();
-    const { paymentMethod = "CASH", items: selectedItems } = body;
+    
+    // OPRAVA ZDE: bereme splitItems i items
+    const { paymentMethod = "CASH" } = body;
+    const selectedItems = body.splitItems || body.items;
 
     if (isNaN(tableId)) {
       return NextResponse.json({ error: "Neplatné ID stolu" }, { status: 400 });
@@ -95,12 +99,12 @@ export async function POST(
         }
 
         // Zkontrolovat, zda na stole ještě něco zbylo
-        const remainingItems = await tx.orderItem.count({
+        const remainingCount = await tx.orderItem.count({
           where: { orderId: order.id },
         });
 
-        // Pokud nezbylo nic, uzavřeme celou objednávku i stůl
-        if (remainingItems === 0) {
+        // Pouze pokud nezbylo vůbec nic, uzavřeme celou objednávku
+        if (remainingCount === 0) {
           await tx.order.update({
             where: { id: order.id },
             data: {
@@ -108,14 +112,13 @@ export async function POST(
               closedAt: new Date(),
             },
           });
-
           await tx.table.update({
             where: { id: tableId },
             data: { status: "open" },
           });
         }
       } else {
-        // Platba celého stolu najednou -> rovnou uzavřeme
+        // Platba celého stolu najednou -> uzavřeme
         await tx.order.update({
           where: { id: order.id },
           data: {
@@ -123,7 +126,6 @@ export async function POST(
             closedAt: new Date(),
           },
         });
-
         await tx.table.update({
           where: { id: tableId },
           data: { status: "open" },

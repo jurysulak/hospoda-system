@@ -332,12 +332,14 @@ export default function TableDetailPage() {
     setIsPaying(true);
 
     try {
+      const splitItemsArray = Object.entries(splitSelected)
+        .filter(([_, qty]) => qty > 0)
+        .map(([id, qty]) => ({ itemId: Number(id), quantity: qty }));
+
       const payload = splitMode
         ? {
             paymentMethod: method,
-            splitItems: Object.entries(splitSelected)
-              .filter(([_, qty]) => qty > 0)
-              .map(([id, qty]) => ({ itemId: Number(id), quantity: qty })),
+            splitItems: splitItemsArray,
           }
         : { paymentMethod: method };
 
@@ -348,7 +350,7 @@ export default function TableDetailPage() {
       });
 
       if (res.ok) {
-        // Příprava položek k tisku
+        // Tisk účtenky: pokud jsme dělili, vytiskneme pouze vybrané kusy!
         const itemsToPrint = splitMode
           ? rawItems
               .filter((i) => (splitSelected[i.id] || 0) > 0)
@@ -363,7 +365,6 @@ export default function TableDetailPage() {
               unitPrice: i.unitPrice,
             }));
 
-        // Spuštění tisku přes RawBT
         printReceiptViaRawBT({
           tableName: table?.name || `Stůl ${tableId}`,
           items: itemsToPrint,
@@ -372,17 +373,19 @@ export default function TableDetailPage() {
         });
 
         setIsPayModalOpen(false);
+        const wasFullPay = !splitMode || splitSum === totalAccountSum;
         setSplitMode(false);
         setSplitSelected({});
 
-        if (!splitMode || splitSum === totalAccountSum) {
+        if (wasFullPay) {
           router.push(mapBackUrl);
         } else {
-          loadData();
+          // Zůstáváme na stole a znovu načteme zbytek neuhrazeného účtu
+          await loadData();
         }
       }
     } catch (e) {
-      console.error("Chyba při platbě a tisku:", e);
+      console.error("Chyba při platbě:", e);
     } finally {
       setIsPaying(false);
     }
