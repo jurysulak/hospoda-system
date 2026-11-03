@@ -167,9 +167,16 @@ export function printDailySummaryViaRawBT(summary: SummaryPrintParams) {
     });
   }
 
+  // lib/printReceipt.ts
+
+// ... (předchozí kód zůstává stejný)
+
   lines.push(doubleDivider);
-  lines.push(center("Konec denního souhrnu"));
-  lines.push("\x1d\x56\x00");
+  lines.push(center("********* DEKUJEME VAM *********"));
+  
+  // Přidáme prázdné řádky pro bezpečný výsuv papíru nad řezací nůž
+  lines.push("\n\n\n\n");
+  lines.push("\x1d\x56\x00"); // Příkaz ESC/POS pro odstřih
 
   const rawText = lines.join("\n");
   window.location.href = `rawbt:${encodeURIComponent(rawText)}`;

@@ -12,8 +12,7 @@ export async function POST(
     const { id } = await params;
     const tableId = Number(id);
     const body = await req.json();
-    
-    // OPRAVA ZDE: bereme splitItems i items
+
     const { paymentMethod = "CASH" } = body;
     const selectedItems = body.splitItems || body.items;
 
@@ -39,22 +38,32 @@ export async function POST(
       );
     }
 
-    // Rozlišení: Platba vybraných položek vs. Celý účet
     const isPartialPay =
       Array.isArray(selectedItems) && selectedItems.length > 0;
 
     let paymentAmount = 0;
+    const paidItemsData: Array<{
+      productId: number | null;
+      productName: string;
+      unitPrice: number;
+      quantity: number;
+    }> = [];
 
     if (isPartialPay) {
       for (const sel of selectedItems) {
         const item = order.items.find((i) => i.id === sel.itemId);
-        if (item) {
+        if (item && sel.quantity > 0) {
           const qty = Math.min(sel.quantity, item.quantity);
           paymentAmount += item.unitPrice * qty;
+          paidItemsData.push({
+            productId: item.productId,
+            productName: item.productName,
+            unitPrice: item.unitPrice,
+            quantity: qty,
+          });
         }
       }
     } else {
-      // Celá objednávka najednou
       paymentAmount = order.items.reduce(
         (sum, item) => sum + item.unitPrice * item.quantity,
         0
@@ -68,19 +77,30 @@ export async function POST(
       );
     }
 
-    // Transakce: Vytvoření platby a úprava položek / uzavření stolu
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Záznam o platbě do tabulky Payment
-      const payment = await tx.payment.create({
-        data: {
-          orderId: order.id,
-          amount: paymentAmount,
-          paymentMethod,
-        },
-      });
-
       if (isPartialPay) {
-        // Odečíst vybrané kusy z položek
+        // 1. Vytvoříme samostatnou uzavřenou objednávku jen pro tyto zaplacené kusy
+        const paidOrder = await tx.order.create({
+          data: {
+            tableId,
+            status: "closed",
+            closedAt: new Date(),
+            items: {
+              create: paidItemsData,
+            },
+          },
+        });
+
+        // 2. Navážeme platbu přímo na tuto novou objednávku (pro přesné kopie účtenek)
+        const payment = await tx.payment.create({
+          data: {
+            orderId: paidOrder.id,
+            amount: paymentAmount,
+            paymentMethod,
+          },
+        });
+
+        // 3. Z původního stolu odečteme zaplacené kusy
         for (const sel of selectedItems) {
           const item = order.items.find((i) => i.id === sel.itemId);
           if (item) {
@@ -98,12 +118,11 @@ export async function POST(
           }
         }
 
-        // Zkontrolovat, zda na stole ještě něco zbylo
+        // 4. Pokud na stole nezbylo vůbec nic, uzavřeme i původní objednávku
         const remainingCount = await tx.orderItem.count({
           where: { orderId: order.id },
         });
 
-        // Pouze pokud nezbylo vůbec nic, uzavřeme celou objednávku
         if (remainingCount === 0) {
           await tx.order.update({
             where: { id: order.id },
@@ -117,8 +136,18 @@ export async function POST(
             data: { status: "open" },
           });
         }
+
+        return payment;
       } else {
-        // Platba celého stolu najednou -> uzavřeme
+        // Platba celého stolu najednou
+        const payment = await tx.payment.create({
+          data: {
+            orderId: order.id,
+            amount: paymentAmount,
+            paymentMethod,
+          },
+        });
+
         await tx.order.update({
           where: { id: order.id },
           data: {
@@ -126,13 +155,14 @@ export async function POST(
             closedAt: new Date(),
           },
         });
+
         await tx.table.update({
           where: { id: tableId },
           data: { status: "open" },
         });
-      }
 
-      return payment;
+        return payment;
+      }
     });
 
     return NextResponse.json({ success: true, payment: result });
