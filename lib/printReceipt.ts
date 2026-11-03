@@ -111,7 +111,7 @@ export function printReceiptViaRawBT({
   );
   lines.push(doubleDivider);
   lines.push(center("********* DĚKUJEME VÁM *********"));
-  lines.push("\x1d\x56\x00"); // Příkaz ESC/POS pro okamžitý odstřih
+  lines.push("\n\n\n\n");
 
   const rawText = lines.join("\n");
   window.location.href = `rawbt:${encodeURIComponent(rawText)}`;
@@ -176,7 +176,7 @@ export function printDailySummaryViaRawBT(summary: SummaryPrintParams) {
   
   // Přidáme prázdné řádky pro bezpečný výsuv papíru nad řezací nůž
   lines.push("\n\n\n\n");
-  lines.push("\x1d\x56\x00"); // Příkaz ESC/POS pro odstřih
+  
 
   const rawText = lines.join("\n");
   window.location.href = `rawbt:${encodeURIComponent(rawText)}`;
