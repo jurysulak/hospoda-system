@@ -8,6 +8,8 @@ type Product = {
   name: string;
   category: string;
   price: number;
+  order?: number;
+  isFavorite?: boolean;
 };
 
 export default function ProductsPage() {
@@ -19,7 +21,7 @@ export default function ProductsPage() {
   // Formulář pro nový produkt
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState("");
-  const [newCategory, setNewCategory] = useState("Jídlo");
+  const [newCategory, setNewCategory] = useState("Pivo");
   const [isCreating, setIsCreating] = useState(false);
 
   // Editovaný produkt
@@ -29,7 +31,24 @@ export default function ProductsPage() {
   const [editCategory, setEditCategory] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  // Načtení produktů
+  // Načtení oblíbených z localStorage
+  const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("favorite_product_ids");
+      if (stored) setFavoriteIds(JSON.parse(stored));
+    } catch {}
+  }, []);
+
+  const toggleFavorite = (id: number) => {
+    setFavoriteIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      localStorage.setItem("favorite_product_ids", JSON.stringify(next));
+      return next;
+    });
+  };
+
   const loadProducts = async () => {
     try {
       const res = await fetch("/api/products", { cache: "no-store" });
@@ -48,7 +67,29 @@ export default function ProductsPage() {
     loadProducts();
   }, []);
 
-  // Vytvoření nového produktu
+  // Posun pořadí (šipky nahoru / dolů)
+  const moveProduct = async (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= products.length) return;
+
+    const updated = [...products];
+    const temp = updated[index];
+    updated[index] = updated[targetIndex];
+    updated[targetIndex] = temp;
+
+    setProducts(updated);
+
+    try {
+      await fetch("/api/products/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productIds: updated.map((p) => p.id) }),
+      });
+    } catch (e) {
+      console.error("Chyba při ukládání pořadí:", e);
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName || !newPrice) return;
@@ -72,14 +113,13 @@ export default function ProductsPage() {
       } else {
         alert("Chyba při vytváření produktu");
       }
-    } catch (e) {
+    } catch {
       alert("Chyba spojení");
     } finally {
       setIsCreating(false);
     }
   };
 
-  // Zahájení editace
   const startEdit = (product: Product) => {
     setEditingProduct(product);
     setEditName(product.name);
@@ -87,7 +127,6 @@ export default function ProductsPage() {
     setEditCategory(product.category);
   };
 
-  // Uložení úpravy
   const handleSaveEdit = async () => {
     if (!editingProduct) return;
 
@@ -109,29 +148,24 @@ export default function ProductsPage() {
       } else {
         alert("Chyba při úpravě produktu");
       }
-    } catch (e) {
+    } catch {
       alert("Chyba spojení při úpravě");
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Smazání produktu
   const handleDelete = async (id: number, name: string) => {
     if (!window.confirm(`Opravdu chceš smazat položku "${name}"?`)) return;
 
     try {
-      const res = await fetch(`/api/products/${id}`, {
-        method: "DELETE",
-      });
-
+      const res = await fetch(`/api/products/${id}`, { method: "DELETE" });
       if (res.ok) {
         await loadProducts();
       } else {
-        const err = await res.json();
-        alert(err.error || "Položku nelze smazat");
+        alert("Položku nelze smazat");
       }
-    } catch (e) {
+    } catch {
       alert("Chyba při mazání položky");
     }
   };
@@ -146,8 +180,7 @@ export default function ProductsPage() {
 
   return (
     <main className="min-h-screen bg-slate-100 p-4 sm:p-6 select-none">
-      <div className="mx-auto max-w-6xl space-y-5">
-        
+      <div className="mx-auto max-w-5xl space-y-5">
         {/* Horní hlavička */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -190,7 +223,7 @@ export default function ProductsPage() {
             />
             <input
               type="text"
-              placeholder="Kategorie (např. Jídlo, Pivo)"
+              placeholder="Kategorie (např. Pivo, Jídlo)"
               value={newCategory}
               onChange={(e) => setNewCategory(e.target.value)}
               className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900"
@@ -206,7 +239,7 @@ export default function ProductsPage() {
           </form>
         </div>
 
-        {/* Vyhledávání a filtr */}
+        {/* Vyhledávání a filtry */}
         <div className="rounded-3xl bg-white p-4 shadow-xs border border-slate-200 space-y-3">
           <input
             type="text"
@@ -220,6 +253,7 @@ export default function ProductsPage() {
             {categories.map((cat) => (
               <button
                 key={cat}
+                type="button"
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition cursor-pointer ${
                   selectedCategory === cat
@@ -233,12 +267,14 @@ export default function ProductsPage() {
           </div>
         </div>
 
-        {/* Seznam produktů v tabulce */}
+        {/* Seznam produktů */}
         <div className="rounded-3xl bg-white shadow-xs border border-slate-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 border-b border-slate-200 text-xs font-bold uppercase text-slate-500">
                 <tr>
+                  <th className="px-4 py-3.5 w-12 text-center">⭐</th>
+                  <th className="px-4 py-3.5 w-20 text-center">Pořadí</th>
                   <th className="px-5 py-3.5">Název</th>
                   <th className="px-5 py-3.5">Kategorie</th>
                   <th className="px-5 py-3.5">Cena</th>
@@ -246,40 +282,80 @@ export default function ProductsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredProducts.map((product) => (
-                  <tr key={product.id} className="hover:bg-slate-50/60 transition">
-                    <td className="px-5 py-3 font-bold text-slate-900">
-                      {product.name}
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-700">
-                        {product.category}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 font-extrabold text-slate-900">
-                      {product.price} Kč
-                    </td>
-                    <td className="px-5 py-3 text-right space-x-1.5">
-                      <button
-                        onClick={() => startEdit(product)}
-                        className="rounded-lg border border-slate-300 bg-white hover:bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 transition cursor-pointer"
-                      >
-                        ✏️ Upravit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(product.id, product.name)}
-                        className="rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 px-2.5 py-1 text-xs font-bold text-red-600 transition cursor-pointer"
-                      >
-                        🗑️ Smazat
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {filteredProducts.map((product, idx) => {
+                  const isFav = favoriteIds.includes(product.id);
+                  return (
+                    <tr key={product.id} className="hover:bg-slate-50/60 transition">
+                      {/* Tlačítko hvězdičky */}
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => toggleFavorite(product.id)}
+                          className={`text-lg transition cursor-pointer hover:scale-125 ${
+                            isFav ? "text-amber-500 drop-shadow-xs" : "text-slate-300 hover:text-amber-400"
+                          }`}
+                          title={isFav ? "Odebrat z oblíbených" : "Přidat do oblíbených"}
+                        >
+                          {isFav ? "★" : "☆"}
+                        </button>
+                      </td>
+
+                      {/* Šipky nahoru / dolů */}
+                      <td className="px-4 py-3 text-center">
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => moveProduct(idx, "up")}
+                            disabled={idx === 0}
+                            className="rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-20 px-2 py-0.5 text-xs font-bold text-slate-700 transition cursor-pointer"
+                            title="Posunout nahoru"
+                          >
+                            ▲
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveProduct(idx, "down")}
+                            disabled={idx === filteredProducts.length - 1}
+                            className="rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-20 px-2 py-0.5 text-xs font-bold text-slate-700 transition cursor-pointer"
+                            title="Posunout dolů"
+                          >
+                            ▼
+                          </button>
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-3 font-bold text-slate-900">{product.name}</td>
+                      <td className="px-5 py-3">
+                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-700">
+                          {product.category}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 font-extrabold text-slate-900">
+                        {product.price} Kč
+                      </td>
+                      <td className="px-5 py-3 text-right space-x-1.5">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(product)}
+                          className="rounded-lg border border-slate-300 bg-white hover:bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 transition cursor-pointer"
+                        >
+                          ✏️ Upravit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(product.id, product.name)}
+                          className="rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 px-2.5 py-1 text-xs font-bold text-red-600 transition cursor-pointer"
+                        >
+                          🗑️ Smazat
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
-
       </div>
 
       {/* MODAL PRO EDITACI PRODUKTU */}
@@ -323,6 +399,7 @@ export default function ProductsPage() {
 
             <div className="mt-6 flex flex-col gap-2">
               <button
+                type="button"
                 onClick={handleSaveEdit}
                 disabled={isSaving}
                 className="w-full rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-95 py-3 text-sm font-bold text-white shadow transition cursor-pointer disabled:opacity-50"
@@ -330,6 +407,7 @@ export default function ProductsPage() {
                 {isSaving ? "Ukládám..." : "Uložit změny"}
               </button>
               <button
+                type="button"
                 onClick={() => setEditingProduct(null)}
                 disabled={isSaving}
                 className="w-full rounded-2xl bg-slate-100 hover:bg-slate-200 py-2.5 text-xs font-semibold text-slate-600 transition cursor-pointer"

@@ -143,7 +143,12 @@ export default function TableDetailPage() {
 
     // 2. Záložka "⭐ Oblíbené" -> Zobrazí všechny produkty seřazené: nejdříve pití, potom jídlo
     if (activeCategory === "⭐ Oblíbené") {
-      return list.sort((a, b) => {
+      // Pokud jsou vybrány ručně označené oblíbené, filtrujeme je; pokud ještě žádné nejsou, zobrazíme vše
+      let favList = favoriteIds.length > 0 
+        ? list.filter((p) => favoriteIds.includes(p.id))
+        : list;
+
+      return favList.sort((a, b) => {
         const aDrink = isDrink(a.category);
         const bDrink = isDrink(b.category);
 
@@ -306,6 +311,15 @@ export default function TableDetailPage() {
       setIsPaying(false);
     }
   };
+
+  const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("favorite_product_ids");
+      if (stored) setFavoriteIds(JSON.parse(stored));
+    } catch {}
+  }, []);
 
   return (
     <main className="h-screen max-h-screen bg-slate-100 p-2 sm:p-3 flex flex-col overflow-hidden select-none">
