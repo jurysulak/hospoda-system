@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { use, useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { printReceiptViaRawBT } from "@/lib/printReceipt";
+
+
+
 
 interface Product {
   id: number;
@@ -51,7 +54,9 @@ const CATEGORY_PRIORITY: Record<string, number> = {
   "dezerty": 8,
 };
 
-export default function TableDetailPage() {
+
+
+
   const params = useParams();
   const router = useRouter();
   const tableId = params.id as string;
@@ -73,6 +78,16 @@ export default function TableDetailPage() {
   // Modály a stav platby
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
+
+  export default function TableDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const tableId = params.id as string;
+
+  const [table, setTable] = useState<TableData | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [activeCategory, setActiveCategory] = useState<string>("Vše");
+  const [favoriteIds, setFavoriteIds] = useState<number[]>([]); // <- stačí mít pouze zde
 
   const loadData = async () => {
     try {
@@ -312,13 +327,15 @@ export default function TableDetailPage() {
     }
   };
 
-  const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
-
   useEffect(() => {
     try {
       const stored = localStorage.getItem("favorite_product_ids");
-      if (stored) setFavoriteIds(JSON.parse(stored));
-    } catch {}
+      if (stored) {
+        setFavoriteIds(JSON.parse(stored));
+      }
+    } catch {
+      // Ignorovat chybu, pokud localStorage není dostupný
+    }
   }, []);
 
   return (
