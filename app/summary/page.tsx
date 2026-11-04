@@ -137,10 +137,10 @@ export default function SummaryPage() {
     const items =
       payment.items && payment.items.length > 0
         ? payment.items.map((i) => ({
-            name: i.productName,
-            quantity: i.quantity,
-            unitPrice: i.unitPrice,
-          }))
+          name: i.productName,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+        }))
         : [];
 
     const [hours, minutes] = payment.time.split(":");
@@ -175,7 +175,8 @@ export default function SummaryPage() {
       setPin(nextPin);
       setPinError(false);
       if (nextPin.length === 4) {
-        if (nextPin === "1234") {
+        const savedPin = typeof window !== "undefined" ? localStorage.getItem("summary_pin") || "1234" : "1234";
+        if (nextPin === savedPin) {
           setIsAuthorized(true);
         } else {
           setPinError(true);
@@ -208,13 +209,12 @@ export default function SummaryPage() {
             {[0, 1, 2, 3].map((i) => (
               <div
                 key={i}
-                className={`w-4 h-4 rounded-full transition-all duration-200 ${
-                  pinError
+                className={`w-4 h-4 rounded-full transition-all duration-200 ${pinError
                     ? "bg-red-500 scale-110"
                     : pin.length > i
-                    ? "bg-amber-400 scale-110"
-                    : "bg-slate-700"
-                }`}
+                      ? "bg-amber-400 scale-110"
+                      : "bg-slate-700"
+                  }`}
               />
             ))}
           </div>
@@ -412,13 +412,12 @@ export default function SummaryPage() {
                     key={dateKey}
                     onClick={() => dayInfo && setSelectedDayDetail(dayInfo)}
                     disabled={!dayInfo}
-                    className={`min-h-[68px] p-2 rounded-xl border text-left flex flex-col justify-between transition cursor-pointer ${
-                      isSelected
+                    className={`min-h-[68px] p-2 rounded-xl border text-left flex flex-col justify-between transition cursor-pointer ${isSelected
                         ? "border-amber-500 bg-amber-50/60 ring-2 ring-amber-400"
                         : dayInfo
-                        ? "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                        : "border-slate-100 bg-slate-50/30 opacity-40 cursor-default"
-                    }`}
+                          ? "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                          : "border-slate-100 bg-slate-50/30 opacity-40 cursor-default"
+                      }`}
                   >
                     <span className="text-xs font-black text-slate-800">{dayNum}</span>
                     {dayInfo ? (

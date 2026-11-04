@@ -117,27 +117,65 @@ export default function TableDetailPage() {
   }, [products]);
 
   // Filtrované položky nabídky
+  const isDrink = (cat: string) => {
+    const c = (cat || "").toLowerCase();
+    return (
+      c.includes("piv") ||
+      c.includes("nealko") ||
+      c.includes("limo") ||
+      c.includes("čaj") ||
+      c.includes("alko") ||
+      c.includes("panák") ||
+      c.includes("vín") ||
+      c.includes("káv") ||
+      c.includes("drin")
+    );
+  };
+
   const displayedProducts = useMemo(() => {
-    let list = products;
+    let list = [...products];
+
+    // 1. Fulltextové vyhledávání přes lupu
+    if (searchQuery.trim() !== "") {
+      const q = searchQuery.toLowerCase().trim();
+      return list.filter((p) => p.name.toLowerCase().includes(q));
+    }
+
+    // 2. Záložka "⭐ Oblíbené" -> Zobrazí všechny produkty seřazené: nejdříve pití, potom jídlo
+    if (activeCategory === "⭐ Oblíbené") {
+      return list.sort((a, b) => {
+        const aDrink = isDrink(a.category);
+        const bDrink = isDrink(b.category);
+
+        if (aDrink && !bDrink) return -1;
+        if (!aDrink && bDrink) return 1;
+
+        const orderA = (a as any).order ?? 0;
+        const orderB = (b as any).order ?? 0;
+        if (orderA !== orderB) return orderA - orderB;
+
+        return a.name.localeCompare(b.name, "cs");
+      });
+    }
+
+    // 3. Konkrétní vybraná kategorie
     if (activeCategory !== "Vše") {
       list = list.filter((p) => p.category.trim() === activeCategory);
     }
-    return [...list].sort((a, b) => {
-      // 1. Priorita kategorií (pokud je zvoleno "Vše")
+
+    return list.sort((a, b) => {
       if (activeCategory === "Vše") {
         const pA = CATEGORY_PRIORITY[a.category.toLowerCase()] ?? 99;
         const pB = CATEGORY_PRIORITY[b.category.toLowerCase()] ?? 99;
         if (pA !== pB) return pA - pB;
       }
-      // 2. Ruční pořadí produktu
       const orderA = (a as any).order ?? 0;
       const orderB = (b as any).order ?? 0;
       if (orderA !== orderB) return orderA - orderB;
 
-      // 3. Abeceda jako pojistka
       return a.name.localeCompare(b.name, "cs");
     });
-  }, [products, activeCategory]);
+  }, [products, activeCategory, searchQuery]);
 
   // Přidání produktu
   const handleAddProductById = async (productId: number) => {
@@ -506,28 +544,24 @@ export default function TableDetailPage() {
             </div>
 
             {/* Mřížka položek nabídky */}
-            <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2 pr-1 min-h-0">
-              {displayedProducts.map((p) => {
-                const isJustClicked = p.id === highlightedProductId;
-
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => handleAddProductById(p.id)}
-                    className={`p-3 rounded-2xl border text-left flex flex-col justify-between transition-all duration-200 cursor-pointer active:scale-95 min-h-[76px] ${isJustClicked
-                      ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-400 scale-[1.02]"
-                      : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                      }`}
-                  >
-                    <span className="font-bold text-xs text-slate-800 line-clamp-2 leading-snug">
-                      {p.name}
-                    </span>
-                    <span className="font-black text-xs text-emerald-700 mt-1 block">
-                      {p.price} Kč
-                    </span>
-                  </button>
-                );
-              })}
+            {/* Mřížka tlačítek s produkty */}
+            <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2 pr-1 min-h-0 content-start">
+              {displayedProducts.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => handleAddProductById(p.id)}
+                  className="p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 active:scale-95 text-left flex flex-col justify-between min-h-[74px] transition cursor-pointer shadow-2xs"
+                >
+                  <span className="font-bold text-xs text-slate-900 line-clamp-2 leading-tight">
+                    {p.name}
+                  </span>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-[10px] text-slate-400 font-semibold">{p.category}</span>
+                    <span className="font-black text-xs text-slate-900">{p.price} Kč</span>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
         </div>
