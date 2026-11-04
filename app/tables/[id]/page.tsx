@@ -57,13 +57,14 @@ const CATEGORY_PRIORITY: Record<string, number> = {
 
 
 
+  
+
+  export default function TableDetailPage() {
+
+    
   const params = useParams();
   const router = useRouter();
   const tableId = params.id as string;
-
-  const [table, setTable] = useState<TableData | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [activeCategory, setActiveCategory] = useState<string>("Vše");
 
   // Stav pro fulltextové vyhledávání (lupa)
   const [searchQuery, setSearchQuery] = useState("");
@@ -78,11 +79,6 @@ const CATEGORY_PRIORITY: Record<string, number> = {
   // Modály a stav platby
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
-
-  export default function TableDetailPage() {
-  const params = useParams();
-  const router = useRouter();
-  const tableId = params.id as string;
 
   const [table, setTable] = useState<TableData | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
