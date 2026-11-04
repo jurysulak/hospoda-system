@@ -60,6 +60,9 @@ export default function TableDetailPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>("Vše");
 
+  // Stav pro fulltextové vyhledávání (lupa)
+  const [searchQuery, setSearchQuery] = useState("");
+
   // Vizuální zpětná vazba – ID produktu rozsvíceného na 1 sekundu
   const [highlightedProductId, setHighlightedProductId] = useState<number | null>(null);
 
@@ -105,14 +108,12 @@ export default function TableDetailPage() {
   // Seřazení kategorií
   const sortedCategories = useMemo(() => {
     const unique = Array.from(new Set(products.map((p) => p.category.trim())));
-    return [
-      "Vše",
-      ...unique.sort((a, b) => {
-        const pA = CATEGORY_PRIORITY[a.toLowerCase()] ?? 99;
-        const pB = CATEGORY_PRIORITY[b.toLowerCase()] ?? 99;
-        return pA - pB;
-      }),
-    ];
+    const sorted = unique.sort((a, b) => {
+      const pA = CATEGORY_PRIORITY[a.toLowerCase()] ?? 99;
+      const pB = CATEGORY_PRIORITY[b.toLowerCase()] ?? 99;
+      return pA - pB;
+    });
+    return ["⭐ Oblíbené", "Vše", ...sorted];
   }, [products]);
 
   // Filtrované položky nabídky
@@ -137,7 +138,7 @@ export default function TableDetailPage() {
       return a.name.localeCompare(b.name, "cs");
     });
   }, [products, activeCategory]);
-  
+
   // Přidání produktu
   const handleAddProductById = async (productId: number) => {
     setHighlightedProductId(productId);
@@ -210,17 +211,17 @@ export default function TableDetailPage() {
     // 1. Připravíme data pro tisk
     const itemsToPrint = splitMode
       ? servedItems
-          .filter((i) => (splitSelected[i.id] || 0) > 0)
-          .map((i) => ({
-            name: i.productName,
-            quantity: splitSelected[i.id],
-            unitPrice: i.unitPrice,
-          }))
-      : servedItems.map((i) => ({
+        .filter((i) => (splitSelected[i.id] || 0) > 0)
+        .map((i) => ({
           name: i.productName,
-          quantity: i.quantity,
+          quantity: splitSelected[i.id],
           unitPrice: i.unitPrice,
-        }));
+        }))
+      : servedItems.map((i) => ({
+        name: i.productName,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+      }));
 
     // 2. OKAMŽITÝ TISK: Odešleme do tiskárny hned bez čekání na server!
     printReceiptViaRawBT({
@@ -237,9 +238,9 @@ export default function TableDetailPage() {
 
       const payload = splitMode
         ? {
-            paymentMethod: method,
-            splitItems: splitItemsArray,
-          }
+          paymentMethod: method,
+          splitItems: splitItemsArray,
+        }
         : { paymentMethod: method };
 
       // 3. Zápis do databáze běží souběžně
@@ -330,22 +331,20 @@ export default function TableDetailPage() {
                           handleAddProductById(item.productId);
                         }
                       }}
-                      className={`p-2.5 rounded-xl border transition-all duration-300 flex items-center justify-between cursor-pointer active:scale-[0.99] ${
-                        isHighlighted
-                          ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-400 scale-[1.01]"
-                          : isSplitChosen
+                      className={`p-2.5 rounded-xl border transition-all duration-300 flex items-center justify-between cursor-pointer active:scale-[0.99] ${isHighlighted
+                        ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-400 scale-[1.01]"
+                        : isSplitChosen
                           ? "border-amber-400 bg-amber-50/80 ring-1 ring-amber-300"
                           : "border-slate-100 bg-slate-50/70 hover:bg-slate-100/90"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         {splitMode ? (
                           <span
-                            className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black shrink-0 ${
-                              isSplitChosen
-                                ? "bg-amber-500 text-slate-950"
-                                : "bg-slate-200 text-slate-500"
-                            }`}
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black shrink-0 ${isSplitChosen
+                              ? "bg-amber-500 text-slate-950"
+                              : "bg-slate-200 text-slate-500"
+                              }`}
                           >
                             {splitSelected[item.id] || 0}
                           </span>
@@ -436,11 +435,10 @@ export default function TableDetailPage() {
                     setSplitSelected({});
                   }}
                   disabled={servedItems.length === 0}
-                  className={`py-3 px-3 rounded-2xl font-black text-sm flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer disabled:opacity-30 ${
-                    splitMode
-                      ? "bg-amber-500 hover:bg-amber-400 text-slate-950 border-2 border-amber-600 shadow-xs"
-                      : "bg-slate-100 hover:bg-slate-200 text-slate-800 border-2 border-slate-200"
-                  }`}
+                  className={`py-3 px-3 rounded-2xl font-black text-sm flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer disabled:opacity-30 ${splitMode
+                    ? "bg-amber-500 hover:bg-amber-400 text-slate-950 border-2 border-amber-600 shadow-xs"
+                    : "bg-slate-100 hover:bg-slate-200 text-slate-800 border-2 border-slate-200"
+                    }`}
                 >
                   <span className="text-base">{splitMode ? "✕" : "✂️"}</span>
                   <span>{splitMode ? "Zrušit" : "Rozdělit"}</span>
@@ -461,6 +459,30 @@ export default function TableDetailPage() {
 
           {/* PRAVÝ SLOUPEC: Nabídka produktů a kategorií */}
           <div className="lg:col-span-7 flex flex-col bg-white rounded-2xl border border-slate-200 shadow-xs p-3 min-h-0">
+
+            {/* Lupa / Vyhledávací pole */}
+            <div className="relative mb-2 shrink-0">
+              <span className="absolute inset-y-0 left-3 flex items-center text-slate-400 text-sm pointer-events-none">
+                🔍
+              </span>
+              <input
+                type="text"
+                placeholder="Hledat položku..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:bg-white transition"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute inset-y-0 right-2.5 flex items-center text-xs font-bold text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
             {/* Kategorie */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-2 shrink-0 border-b border-slate-100">
               {sortedCategories.map((cat) => {
@@ -468,12 +490,14 @@ export default function TableDetailPage() {
                 return (
                   <button
                     key={cat}
-                    onClick={() => setActiveCategory(cat)}
-                    className={`px-3 py-1.5 rounded-xl font-bold text-xs whitespace-nowrap transition cursor-pointer ${
-                      isActive
-                        ? "bg-slate-900 text-white shadow-xs"
-                        : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-                    }`}
+                    onClick={() => {
+                      setActiveCategory(cat);
+                      setSearchQuery("");
+                    }}
+                    className={`px-3 py-1.5 rounded-xl font-bold text-xs whitespace-nowrap transition cursor-pointer ${isActive
+                      ? "bg-slate-900 text-white shadow-xs"
+                      : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                      }`}
                   >
                     {cat}
                   </button>
@@ -490,11 +514,10 @@ export default function TableDetailPage() {
                   <button
                     key={p.id}
                     onClick={() => handleAddProductById(p.id)}
-                    className={`p-3 rounded-2xl border text-left flex flex-col justify-between transition-all duration-200 cursor-pointer active:scale-95 min-h-[76px] ${
-                      isJustClicked
-                        ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-400 scale-[1.02]"
-                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                    }`}
+                    className={`p-3 rounded-2xl border text-left flex flex-col justify-between transition-all duration-200 cursor-pointer active:scale-95 min-h-[76px] ${isJustClicked
+                      ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-400 scale-[1.02]"
+                      : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                      }`}
                   >
                     <span className="font-bold text-xs text-slate-800 line-clamp-2 leading-snug">
                       {p.name}

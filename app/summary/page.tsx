@@ -50,6 +50,30 @@ export default function SummaryPage() {
   const [loading, setLoading] = useState(false);
   const [selectedDayDetail, setSelectedDayDetail] = useState<DayData | null>(null);
 
+  // Stav pro změnu PINu
+  const [newPinInput, setNewPinInput] = useState("");
+  const [pinChangeMsg, setPinChangeMsg] = useState("");
+
+  const handleChangePin = async () => {
+    if (newPinInput.length !== 4 || isNaN(Number(newPinInput))) {
+      setPinChangeMsg("PIN musí mít přesně 4 čísla");
+      return;
+    }
+    try {
+      localStorage.setItem("summary_pin", newPinInput);
+      await fetch("/api/pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newPin: newPinInput }),
+      });
+      setPinChangeMsg("✓ PIN úspěšně změněn");
+      setNewPinInput("");
+      setTimeout(() => setPinChangeMsg(""), 3000);
+    } catch {
+      setPinChangeMsg("Chyba při ukládání");
+    }
+  };
+
   const loadCalendar = async (year: number, month: number) => {
     setLoading(true);
     try {
@@ -279,6 +303,43 @@ export default function SummaryPage() {
             </button>
           </div>
         </header>
+
+        {/* Panel pro změnu PINu */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <span className="text-xs font-black text-slate-800 uppercase tracking-wider block">
+              Změna PIN kódu
+            </span>
+            <span className="text-[11px] text-slate-400">
+              Nastav nový 4místný číselný kód pro vstup do souhrnu
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={4}
+              placeholder="Nový PIN"
+              value={newPinInput}
+              onChange={(e) => setNewPinInput(e.target.value.replace(/\D/g, ""))}
+              className="w-28 text-center tracking-widest font-mono text-sm font-bold border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 outline-none focus:ring-2 focus:ring-slate-900"
+            />
+            <button
+              type="button"
+              onClick={handleChangePin}
+              className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-bold text-xs transition cursor-pointer shadow-xs"
+            >
+              Uložit PIN
+            </button>
+          </div>
+
+          {pinChangeMsg && (
+            <span className="w-full text-xs font-bold text-emerald-600 mt-1">
+              {pinChangeMsg}
+            </span>
+          )}
+        </div>
 
         {/* Měsíční souhrn */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
