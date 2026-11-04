@@ -6,10 +6,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    // Pokud máš v DB tabulku Settings, načte se z ní, jinak výchozí
-    const setting = await (prisma as any).setting?.findUnique({
-      where: { key: "admin_pin" },
-    }).catch(() => null);
+    const setting = await (prisma as unknown as { setting?: { findUnique: (args: unknown) => Promise<{ value: string } | null> } })
+      .setting?.findUnique({ where: { key: "admin_pin" } })
+      .catch(() => null);
 
     return NextResponse.json({ pin: setting?.value || "1234" });
   } catch {
@@ -19,19 +18,24 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const { newPin } = await req.json();
+    const body = (await req.json()) as { newPin?: string };
+    const newPin = body.newPin;
+
     if (!newPin || newPin.length !== 4) {
       return NextResponse.json({ error: "PIN musí mít 4 číslice" }, { status: 400 });
     }
 
-    await (prisma as any).setting?.upsert({
-      where: { key: "admin_pin" },
-      update: { value: newPin },
-      create: { key: "admin_pin", value: newPin },
-    }).catch(() => null);
+    await (prisma as unknown as { setting?: { upsert: (args: unknown) => Promise<unknown> } })
+      .setting?.upsert({
+        where: { key: "admin_pin" },
+        update: { value: newPin },
+        create: { key: "admin_pin", value: newPin },
+      })
+      .catch(() => null);
 
     return NextResponse.json({ success: true, pin: newPin });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Chyba serveru";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
