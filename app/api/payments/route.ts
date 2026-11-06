@@ -8,6 +8,16 @@ export async function GET() {
   try {
     const payments = await prisma.payment.findMany({
       take: 60,
+      where: {
+        // Vyřazení stolu Personál ze seznamu plateb
+        order: {
+          table: {
+            name: {
+              not: "Personál",
+            },
+          },
+        },
+      },
       orderBy: {
         createdAt: "desc",
       },
@@ -15,7 +25,7 @@ export async function GET() {
         order: {
           include: {
             table: true,
-            items: true, // <-- důležité pro tisk položek na kopii účtenky
+            items: true, // Důležité pro tisk položek na kopii účtenky
           },
         },
       },

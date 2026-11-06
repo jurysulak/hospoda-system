@@ -36,11 +36,20 @@ export async function GET(req: Request) {
           gte: startOfDay,
           lte: endOfDay,
         },
+        // Vyřazení stolu Personál z tržeb a denního souhrnu
+        order: {
+          table: {
+            name: {
+              not: "Personál",
+            },
+          },
+        },
       },
       include: {
         order: {
           include: {
             table: true,
+            items: true,
           },
         },
       },

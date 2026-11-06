@@ -8,16 +8,41 @@ export default function Home() {
           <p className="mt-3 text-xl text-slate-600">Vyber sekci nebo stůl</p>
         </div>
 
-        {/* Rychlý BAR shortcut - zmenšený proužek */}
-        <div className="flex justify-center mb-6">
+        {/* Rychlý BAR a Stůl Personál vedle sebe */}
+        <div className="flex flex-wrap items-center justify-center gap-4 mb-6">
+          {/* BAR */}
           <a
             href="/api/bar"
             className="inline-flex items-center gap-3 rounded-2xl border-2 border-amber-400 bg-amber-100 hover:bg-amber-200/80 px-6 py-3 shadow-xs transition active:scale-95"
           >
             <span className="text-2xl">🍺</span>
             <span className="text-lg font-black text-amber-950">Rychlý BAR</span>
-            <span className="text-xs font-bold text-amber-800 bg-amber-200/80 px-2 py-0.5 rounded-lg">Rychlý prodej</span>
+            <span className="text-xs font-bold text-amber-800 bg-amber-200/80 px-2 py-0.5 rounded-lg">
+              Rychlý prodej
+            </span>
           </a>
+
+          {/* PERSONÁL */}
+          <div className="flex items-center gap-1.5">
+            <a
+              href="/api/staff"
+              className="inline-flex items-center gap-3 rounded-2xl border-2 border-indigo-400 bg-indigo-100 hover:bg-indigo-200/80 px-6 py-3 shadow-xs transition active:scale-95"
+            >
+              <span className="text-2xl">👔</span>
+              <span className="text-lg font-black text-indigo-950">Personál</span>
+              <span className="text-xs font-bold text-indigo-800 bg-indigo-200/80 px-2 py-0.5 rounded-lg">
+                Mimo tržbu
+              </span>
+            </a>
+
+            <a
+              href="/staff-history"
+              title="Historie konzumace personálu"
+              className="rounded-2xl border-2 border-indigo-300 bg-white hover:bg-indigo-50 p-3 text-indigo-900 font-bold transition active:scale-95 shadow-xs"
+            >
+              📋
+            </a>
+          </div>
         </div>
 
         {/* Hlavní sekce místností */}
