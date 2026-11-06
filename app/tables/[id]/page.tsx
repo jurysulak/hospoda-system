@@ -57,11 +57,11 @@ const CATEGORY_PRIORITY: Record<string, number> = {
 
 
 
-  
 
-  export default function TableDetailPage() {
 
-    
+export default function TableDetailPage() {
+
+
   const params = useParams();
   const router = useRouter();
   const tableId = params.id as string;
@@ -155,7 +155,7 @@ const CATEGORY_PRIORITY: Record<string, number> = {
     // 2. Záložka "⭐ Oblíbené" -> Zobrazí všechny produkty seřazené: nejdříve pití, potom jídlo
     if (activeCategory === "⭐ Oblíbené") {
       // Pokud jsou vybrány ručně označené oblíbené, filtrujeme je; pokud ještě žádné nejsou, zobrazíme vše
-      let favList = favoriteIds.length > 0 
+      let favList = favoriteIds.length > 0
         ? list.filter((p) => favoriteIds.includes(p.id))
         : list;
 
@@ -338,21 +338,21 @@ const CATEGORY_PRIORITY: Record<string, number> = {
     <main className="h-screen max-h-screen bg-slate-100 p-2 sm:p-3 flex flex-col overflow-hidden select-none">
       <div className="mx-auto w-full max-w-7xl flex flex-col flex-1 min-h-0 space-y-2">
         {/* Horní lišta */}
-        <header className="flex items-center justify-between gap-2 bg-white px-3.5 py-2.5 rounded-2xl border border-slate-200 shadow-xs shrink-0">
+        <header className="flex items-center justify-between gap-2 bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-xs shrink-0">
           <div className="flex items-center gap-3">
             <Link
               href={mapBackUrl}
-              className="rounded-xl bg-slate-100 hover:bg-slate-200 px-3.5 py-2 text-xs font-bold text-slate-700 transition active:scale-95"
+              className="rounded-xl bg-slate-100 hover:bg-slate-200 px-4 py-2.5 text-sm sm:text-base font-bold text-slate-700 transition active:scale-95"
             >
               ← Zpět
             </Link>
-            <h1 className="text-xl font-black text-slate-900 tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
               {table?.name || `Stůl ${tableId}`}
             </h1>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs font-black text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200/60">
+            <span className="text-sm font-black text-slate-700 bg-slate-100 px-3.5 py-2 rounded-xl border border-slate-200/60">
               Položek: {servedItems.reduce((acc, i) => acc + i.quantity, 0)}
             </span>
           </div>
@@ -403,10 +403,10 @@ const CATEGORY_PRIORITY: Record<string, number> = {
                           : "border-slate-100 bg-slate-50/70 hover:bg-slate-100/90"
                         }`}
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="flex items-center gap-3 min-w-0">
                         {splitMode ? (
                           <span
-                            className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black shrink-0 ${isSplitChosen
+                            className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black shrink-0 ${isSplitChosen
                               ? "bg-amber-500 text-slate-950"
                               : "bg-slate-200 text-slate-500"
                               }`}
@@ -414,16 +414,16 @@ const CATEGORY_PRIORITY: Record<string, number> = {
                             {splitSelected[item.id] || 0}
                           </span>
                         ) : (
-                          <span className="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center text-xs font-black shrink-0 shadow-2xs">
+                          <span className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center text-sm font-black shrink-0 shadow-2xs">
                             {item.quantity}×
                           </span>
                         )}
 
                         <div className="min-w-0">
-                          <span className="font-bold text-xs text-slate-900 block truncate">
+                          <span className="font-bold text-sm sm:text-base text-slate-900 block truncate">
                             {item.productName}
                           </span>
-                          <span className="text-[11px] text-slate-500 font-medium">
+                          <span className="text-xs sm:text-sm text-slate-500 font-medium">
                             {item.unitPrice} Kč / ks
                           </span>
                         </div>
@@ -578,14 +578,14 @@ const CATEGORY_PRIORITY: Record<string, number> = {
                   key={p.id}
                   type="button"
                   onClick={() => handleAddProductById(p.id)}
-                  className="p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 active:scale-95 text-left flex flex-col justify-between min-h-[74px] transition cursor-pointer shadow-2xs"
+                  className="p-3.5 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 active:scale-95 text-left flex flex-col justify-between min-h-[86px] transition cursor-pointer shadow-2xs"
                 >
-                  <span className="font-bold text-xs text-slate-900 line-clamp-2 leading-tight">
+                  <span className="font-bold text-sm sm:text-base text-slate-900 line-clamp-2 leading-tight">
                     {p.name}
                   </span>
                   <div className="flex items-center justify-between mt-1">
-                    <span className="text-[10px] text-slate-400 font-semibold">{p.category}</span>
-                    <span className="font-black text-xs text-slate-900">{p.price} Kč</span>
+                    <span className="text-xs text-slate-400 font-semibold">{p.category}</span>
+                    <span className="font-black text-sm sm:text-base text-slate-900">{p.price} Kč</span>
                   </div>
                 </button>
               ))}
