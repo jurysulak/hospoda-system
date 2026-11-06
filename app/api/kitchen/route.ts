@@ -8,7 +8,6 @@ export const dynamic = "force-dynamic";
 const EXCLUDED_KEYWORDS = [
   "drink",
   "pochutin",
-  "chuťovk",
   "jiné",
   "jine",
   "ostatní",
@@ -72,6 +71,11 @@ export async function GET() {
         const foodItems = order.items.filter((item) => {
           const cat = (item.product?.category || "").toLowerCase().trim();
           const name = (item.productName || item.product?.name || "").toLowerCase().trim();
+
+          // Pokud jde o chuťovky k pivu, do kuchyně to VŽDYCKY jde
+          if (cat.includes("chuťovk") || cat.includes("chutovk") || name.includes("chuťovk")) {
+            return true;
+          }
 
           const isExcluded = EXCLUDED_KEYWORDS.some(
             (kw) => cat.includes(kw) || name.includes(kw)

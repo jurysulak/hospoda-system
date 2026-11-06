@@ -7,7 +7,6 @@ export const dynamic = "force-dynamic";
 const EXCLUDED_KEYWORDS = [
   "drink",
   "pochutin",
-  "chuťovk",
   "jiné",
   "jine",
   "ostatní",
@@ -89,11 +88,17 @@ export async function GET(req: Request) {
         const cat = (item.product?.category || "").toLowerCase().trim();
         const name = (item.productName || item.product?.name || "").toLowerCase().trim();
 
-        const isExcluded = EXCLUDED_KEYWORDS.some((kw) => cat.includes(kw) || name.includes(kw));
-        if (isExcluded) continue;
+        // Pokud jde o chuťovky k pivu, do kuchyně patří a nevyřazujeme je
+        const isBeerSnack = cat.includes("chuťovk") || cat.includes("chutovk") || name.includes("chuťovk");
+
+        if (!isBeerSnack) {
+          const isExcluded = EXCLUDED_KEYWORDS.some((kw) => cat.includes(kw) || name.includes(kw));
+          if (isExcluded) continue;
+        }
 
         const unitPrice = item.unitPrice || item.product?.price || 0;
         const lineTotal = unitPrice * item.quantity;
+        // ... dál pokračuje zbytek kódu
 
         monthTotalDishes += item.quantity;
         monthTotalRevenue += lineTotal;
