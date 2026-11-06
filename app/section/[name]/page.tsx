@@ -32,8 +32,13 @@ export default async function SectionPage({
   const currentSection =
     sections.find((s) => s.slug === name) || sections[0];
 
-  const filteredTables = tables
-    .filter((table: any) => table.section === currentSection.label)
+ const filteredTables = tables
+    .filter(
+      (table: any) =>
+        table.section === currentSection.label &&
+        table.name.toLowerCase() !== "personál" &&
+        table.name.toLowerCase() !== "personal"
+    )
     .map((table: any) => {
       const openOrder = table.orders?.[0];
       const items = openOrder?.items ?? [];

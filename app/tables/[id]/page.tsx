@@ -105,6 +105,15 @@ export default function TableDetailPage() {
 
   // Cesta zpět do správné místnosti
   const mapBackUrl = useMemo(() => {
+    // Pokud je to stůl Personál nebo BAR, vracíme se na hlavní stránku
+    if (
+      table?.name?.toLowerCase() === "personál" ||
+      table?.name?.toLowerCase() === "personal" ||
+      table?.name?.toLowerCase() === "bar"
+    ) {
+      return "/";
+    }
+
     if (!table?.section) return "/section/vnitrek";
     const sec = table.section.toLowerCase();
     if (sec.includes("zahrad")) return "/section/zahradka";
