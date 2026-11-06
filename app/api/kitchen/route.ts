@@ -1,10 +1,18 @@
+// app/api/kitchen/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-// Seznam zakázaných slov pro kuchyň (jak v kategorii, tak v názvu)
-const DRINK_KEYWORDS = [
+// Seznam zakázaných slov pro kuchyň (jak v kategorii, tak v názvu položky)
+const EXCLUDED_KEYWORDS = [
+  "drink",
+  "pochutin",
+  "chuťovk",
+  "jiné",
+  "jine",
+  "ostatní",
+  "ostatni",
   "pivo",
   "radegast",
   "kozel",
@@ -36,13 +44,11 @@ const DRINK_KEYWORDS = [
   "birell",
   "panák",
   "panak",
-  "drinky",
   "teplé nápoje",
 ];
 
 export async function GET() {
   try {
-    // Načteme všechny otevřené objednávky včetně produktů
     const openOrders = await prisma.order.findMany({
       where: {
         status: "open",
@@ -61,19 +67,17 @@ export async function GET() {
       },
     });
 
-    // Filtrujeme pouze čistě jídla
     const kitchenTickets = openOrders
       .map((order) => {
         const foodItems = order.items.filter((item) => {
           const cat = (item.product?.category || "").toLowerCase().trim();
           const name = (item.productName || item.product?.name || "").toLowerCase().trim();
 
-          // Pokud název nebo kategorie obsahuje cokoliv z nápojů, vyřadíme to
-          const isDrink = DRINK_KEYWORDS.some(
+          const isExcluded = EXCLUDED_KEYWORDS.some(
             (kw) => cat.includes(kw) || name.includes(kw)
           );
 
-          return !isDrink;
+          return !isExcluded;
         });
 
         return {
@@ -90,7 +94,7 @@ export async function GET() {
           })),
         };
       })
-      .filter((ticket) => ticket.items.length > 0); // Zobrazíme jen stoly, co mají reálné jídlo
+      .filter((ticket) => ticket.items.length > 0);
 
     return NextResponse.json(kitchenTickets, { status: 200 });
   } catch (error: any) {
