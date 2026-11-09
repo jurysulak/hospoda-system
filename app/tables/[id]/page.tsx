@@ -31,11 +31,14 @@ interface Order {
   items: OrderItem[];
 }
 
-interface TableData {
-  id: number;
-  name: string;
-  section?: string | null;
-  orders: Order[];
+interface TableData {  
+  id: number;  
+  name: string;  
+  section?: string | null;  
+  isReserved?: boolean | null;
+  customerName?: string | null;
+  reservationTime?: string | null;
+  orders: Order[];  
 }
 
 const CATEGORY_PRIORITY: Record<string, number> = {
@@ -85,6 +88,18 @@ export default function TableDetailPage() {
   const [activeCategory, setActiveCategory] = useState<string>("Vše");
   const [favoriteIds, setFavoriteIds] = useState<number[]>([]); // <- stačí mít pouze zde
 
+  // Stavy pro Přesun stolu
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [allTables, setAllTables] = useState<any[]>([]);
+  const [selectedTargetTable, setSelectedTargetTable] = useState<number | null>(null);
+  const [isTransferring, setIsTransferring] = useState(false);
+
+  // Stavy pro Rezervaci
+  const [isReserveModalOpen, setIsReserveModalOpen] = useState(false);
+  const [reserveName, setReserveName] = useState("");
+  const [reserveTime, setReserveTime] = useState("");
+  const [isReserving, setIsReserving] = useState(false);
+
   const loadData = async () => {
     try {
       const [tableRes, prodRes] = await Promise.all([
@@ -96,6 +111,64 @@ export default function TableDetailPage() {
       if (prodRes.ok) setProducts(await prodRes.json());
     } catch (e) {
       console.error("Chyba při načítání dat:", e);
+    }
+  };
+
+  // Načtení všech stolů pro výběr cíle při přesunu
+  useEffect(() => {
+    fetch("/api/tables", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setAllTables(data.filter((t) => t.id !== Number(tableId)));
+        }
+      })
+      .catch(() => {});
+  }, [tableId]);
+
+  const handleTransfer = async () => {
+    if (!selectedTargetTable) return;
+    try {
+      setIsTransferring(true);
+      const res = await fetch(`/api/tables/${tableId}/transfer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetTableId: selectedTargetTable }),
+      });
+      if (res.ok) {
+        setIsTransferModalOpen(false);
+        router.push(`/tables/${selectedTargetTable}`);
+      } else {
+        const err = await res.json();
+        alert(err.error || "Chyba při přesunu");
+      }
+    } catch {
+      alert("Chyba spojení");
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
+  const handleSaveReservation = async (isReserved: boolean) => {
+    try {
+      setIsReserving(true);
+      const res = await fetch(`/api/tables/${tableId}/reserve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          isReserved,
+          customerName: reserveName,
+          reservationTime: reserveTime,
+        }),
+      });
+      if (res.ok) {
+        setIsReserveModalOpen(false);
+        await loadData();
+      }
+    } catch {
+      alert("Chyba při ukládání rezervace");
+    } finally {
+      setIsReserving(false);
     }
   };
 
@@ -358,6 +431,39 @@ export default function TableDetailPage() {
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
               {table?.name || `Stůl ${tableId}`}
             </h1>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Tlačítko Rezervace */}
+            <button
+              type="button"
+              onClick={() => {
+                setReserveName(table?.customerName || "");
+                setReserveTime(table?.reservationTime || "");
+                setIsReserveModalOpen(true);
+              }}
+              className={`rounded-xl px-3 py-2 text-xs sm:text-sm font-black transition active:scale-95 cursor-pointer shadow-xs ${
+                table?.isReserved
+                  ? "bg-amber-400 text-slate-950 hover:bg-amber-500"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+            >
+              📅 {table?.isReserved ? "Rezervováno" : "Rezervace"}
+            </button>
+
+            {/* Tlačítko Přesunout stůl */}
+            <button
+              type="button"
+              onClick={() => setIsTransferModalOpen(true)}
+              disabled={servedItems.length === 0}
+              className="rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 px-3 py-2 text-xs sm:text-sm font-black text-slate-700 transition active:scale-95 cursor-pointer shadow-xs"
+            >
+              🔀 Přesunout
+            </button>
+
+            <span className="text-sm font-black text-slate-700 bg-slate-100 px-3.5 py-2 rounded-xl border border-slate-200/60">
+              Položek: {servedItems.reduce((acc, i) => acc + i.quantity, 0)}
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -642,6 +748,120 @@ export default function TableDetailPage() {
             >
               Zrušit
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODÁL PŘESUNUTÍ STOLU */}
+      {isTransferModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-xl font-black text-slate-900">🔀 Přesunout účet</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Vyber cílový stůl, na který se převedou veškeré položky.
+            </p>
+
+            <div className="mt-4 max-h-60 overflow-y-auto space-y-1.5 pr-1">
+              {allTables.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setSelectedTargetTable(t.id)}
+                  className={`w-full p-3 rounded-xl border text-left font-bold text-sm flex items-center justify-between transition cursor-pointer ${
+                    selectedTargetTable === t.id
+                      ? "border-slate-900 bg-slate-900 text-white"
+                      : "border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800"
+                  }`}
+                >
+                  <span>{t.name}</span>
+                  <span className="text-xs font-semibold opacity-70">{t.section}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleTransfer}
+                disabled={!selectedTargetTable || isTransferring}
+                className="w-full rounded-2xl bg-amber-500 hover:bg-amber-600 active:scale-95 py-3 text-sm font-black text-slate-950 shadow transition cursor-pointer disabled:opacity-40"
+              >
+                {isTransferring ? "Přesouvám..." : "Potvrdit přesun"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsTransferModalOpen(false)}
+                className="w-full rounded-2xl bg-slate-100 hover:bg-slate-200 py-2.5 text-xs font-semibold text-slate-600 transition cursor-pointer"
+              >
+                Zrušit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODÁL REZERVACE */}
+      {isReserveModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-xl font-black text-slate-900">📅 Rezervace stolu</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Nastav jméno hosta a čas příchodu.
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Jméno hosta</label>
+                <input
+                  type="text"
+                  placeholder="např. Novák (4 osoby)"
+                  value={reserveName}
+                  onChange={(e) => setReserveName(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Čas příchodu</label>
+                <input
+                  type="text"
+                  placeholder="např. 18:00"
+                  value={reserveTime}
+                  onChange={(e) => setReserveTime(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => handleSaveReservation(true)}
+                disabled={isReserving}
+                className="w-full rounded-2xl bg-amber-400 hover:bg-amber-500 active:scale-95 py-3 text-sm font-black text-slate-950 shadow transition cursor-pointer"
+              >
+                {isReserving ? "Ukládám..." : "Uložit rezervaci"}
+              </button>
+
+              {table?.isReserved && (
+                <button
+                  type="button"
+                  onClick={() => handleSaveReservation(false)}
+                  disabled={isReserving}
+                  className="w-full rounded-2xl border border-red-200 bg-red-50 hover:bg-red-100 py-2.5 text-xs font-bold text-red-600 transition cursor-pointer"
+                >
+                  Zrušit rezervaci stolu
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setIsReserveModalOpen(false)}
+                className="w-full rounded-2xl bg-slate-100 hover:bg-slate-200 py-2.5 text-xs font-semibold text-slate-600 transition cursor-pointer"
+              >
+                Zavřít
+              </button>
+            </div>
           </div>
         </div>
       )}
