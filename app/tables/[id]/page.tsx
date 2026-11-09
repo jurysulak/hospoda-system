@@ -266,46 +266,67 @@ export default function TableDetailPage() {
       return list.filter((p) => p.name.toLowerCase().includes(q));
     }
 
-    // 2. Záložka "⭐ Oblíbené" -> Zobrazí všechny produkty seřazené: nejdříve pití, potom jídlo
-    // 2. Záložka "⭐ Oblíbené" -> Nejprodávanější produkty (bestsellery)
+    // 2. Záložka "⭐ Oblíbené" -> Nejprodávanější produkty
     if (activeCategory === "⭐ Oblíbené") {
-      let favList: Product[] = [];
-
-      // A) Pokud máme data z reálných prodejů, vezmeme TOP produkty
+      // A) Máme reálné prodeje z plateb -> zobrazíme přesně TOP položky v pořadí prodejnosti
       if (topProductIds.length > 0) {
-        favList = topProductIds
+        const topList = topProductIds
           .map((id) => list.find((p) => p.id === id))
-          .filter((p): p is Product => p !== undefined)
-          .slice(0, 15); // Zobrazíme TOP 15 nejprodávanějších položek
+          .filter((p): p is Product => p !== undefined);
+
+        if (topList.length > 0) {
+          return topList.slice(0, 15);
+        }
       }
 
-      // B) Pokud ještě není dost prodejů, nabídneme hlavní taháky (piva, kofolu, klasiky)
-      if (favList.length === 0) {
-        favList = list.filter((p) => {
-          const name = p.name.toLowerCase();
-          const cat = p.category.toLowerCase();
-          return (
-            cat.includes("piv") ||
-            name.includes("hladinka") ||
-            name.includes("kofola") ||
-            name.includes("káva") ||
-            cat.includes("chuťovk")
-          );
-        });
-      }
+      // B) Záložní režim (priorita: čepovaná piva -> kofola -> nejoblíbenější jídla)
+      const priorityWeights = (name: string, cat: string) => {
+        const n = name.toLowerCase();
+        const c = cat.toLowerCase();
 
-      // Seřadíme: nejdříve nejprodávanější pití, pak jídlo
-      return favList.sort((a, b) => {
-        const aDrink = isDrink(a.category);
-        const bDrink = isDrink(b.category);
+        // 1. Nejčastější piva na čepu
+        if (n.includes("radegast 10") && n.includes("hladinka")) return 1;
+        if (n.includes("radegast 12") && n.includes("hladinka")) return 2;
+        if (n.includes("pilsner") && n.includes("hladinka")) return 3;
+        if (n.includes("radegast 10") && n.includes("malé")) return 4;
+        if (n.includes("radegast 12") && n.includes("malé")) return 5;
+        if (n.includes("pilsner") && n.includes("malé")) return 6;
+        if (c.includes("piv")) return 10;
 
-        if (aDrink && !bDrink) return -1;
-        if (!aDrink && bDrink) return 1;
+        // 2. Hlavní nealko
+        if (n.includes("kofola 0,5")) return 11;
+        if (n.includes("kofola 0,3")) return 12;
+        if (c.includes("nealko")) return 15;
+
+        // 3. Chuťovky a jídlo až na závěr
+        if (c.includes("chuťovk") || c.includes("jídlo")) return 25;
+
+        return 50;
+      };
+
+      const fallbackList = list.filter((p) => {
+        const n = p.name.toLowerCase();
+        const c = p.category.toLowerCase();
+        return (
+          c.includes("piv") ||
+          n.includes("kofola") ||
+          n.includes("káva") ||
+          c.includes("chuťovk") ||
+          c.includes("jídlo")
+        );
+      });
+
+      return fallbackList.sort((a, b) => {
+        const weightA = priorityWeights(a.name, a.category);
+        const weightB = priorityWeights(b.name, b.category);
+
+        if (weightA !== weightB) {
+          return weightA - weightB;
+        }
 
         return a.name.localeCompare(b.name, "cs");
       });
     }
-
     // 3. Konkrétní vybraná kategorie
     if (activeCategory !== "Vše") {
       list = list.filter((p) => p.category.trim() === activeCategory);
