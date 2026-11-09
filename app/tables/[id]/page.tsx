@@ -100,15 +100,47 @@ export default function TableDetailPage() {
   const [reserveTime, setReserveTime] = useState("");
   const [isReserving, setIsReserving] = useState(false);
 
+  const [topProductIds, setTopProductIds] = useState<number[]>([]);
+
   const loadData = async () => {
     try {
-      const [tableRes, prodRes] = await Promise.all([
+      const [tableRes, prodRes, paymentsRes] = await Promise.all([
         fetch(`/api/tables/${tableId}`, { cache: "no-store" }),
         fetch(`/api/products`, { cache: "no-store" }),
+        fetch(`/api/payments`, { cache: "no-store" }),
       ]);
 
       if (tableRes.ok) setTable(await tableRes.json());
       if (prodRes.ok) setProducts(await prodRes.json());
+
+      // Spočítáme nejprodávanější produkty z plateb
+      if (paymentsRes.ok) {
+        const paymentsData = await paymentsRes.json();
+        const salesCounts: Record<string, number> = {};
+
+        if (Array.isArray(paymentsData)) {
+          for (const p of paymentsData) {
+            for (const it of p.order?.items || []) {
+              salesCounts[it.productName] = (salesCounts[it.productName] || 0) + it.quantity;
+            }
+          }
+        }
+
+        // Seřadíme názvy podle počtu prodejů
+        const sortedNames = Object.entries(salesCounts)
+          .sort(([, a], [, b]) => b - a)
+          .map(([name]) => name);
+
+        // Přiřadíme odpovídající ID produktů
+        if (prodRes.ok) {
+          const prods: Product[] = await prodRes.clone().json();
+          const ids = sortedNames
+            .map((name) => prods.find((pr) => pr.name.toLowerCase() === name.toLowerCase())?.id)
+            .filter((id): id is number => id !== undefined);
+
+          setTopProductIds(ids);
+        }
+      }
     } catch (e) {
       console.error("Chyba při načítání dat:", e);
     }
@@ -235,22 +267,40 @@ export default function TableDetailPage() {
     }
 
     // 2. Záložka "⭐ Oblíbené" -> Zobrazí všechny produkty seřazené: nejdříve pití, potom jídlo
+    // 2. Záložka "⭐ Oblíbené" -> Nejprodávanější produkty (bestsellery)
     if (activeCategory === "⭐ Oblíbené") {
-      // Pokud jsou vybrány ručně označené oblíbené, filtrujeme je; pokud ještě žádné nejsou, zobrazíme vše
-      let favList = favoriteIds.length > 0
-        ? list.filter((p) => favoriteIds.includes(p.id))
-        : list;
+      let favList: Product[] = [];
 
+      // A) Pokud máme data z reálných prodejů, vezmeme TOP produkty
+      if (topProductIds.length > 0) {
+        favList = topProductIds
+          .map((id) => list.find((p) => p.id === id))
+          .filter((p): p is Product => p !== undefined)
+          .slice(0, 15); // Zobrazíme TOP 15 nejprodávanějších položek
+      }
+
+      // B) Pokud ještě není dost prodejů, nabídneme hlavní taháky (piva, kofolu, klasiky)
+      if (favList.length === 0) {
+        favList = list.filter((p) => {
+          const name = p.name.toLowerCase();
+          const cat = p.category.toLowerCase();
+          return (
+            cat.includes("piv") ||
+            name.includes("hladinka") ||
+            name.includes("kofola") ||
+            name.includes("káva") ||
+            cat.includes("chuťovk")
+          );
+        });
+      }
+
+      // Seřadíme: nejdříve nejprodávanější pití, pak jídlo
       return favList.sort((a, b) => {
         const aDrink = isDrink(a.category);
         const bDrink = isDrink(b.category);
 
         if (aDrink && !bDrink) return -1;
         if (!aDrink && bDrink) return 1;
-
-        const orderA = (a as any).order ?? 0;
-        const orderB = (b as any).order ?? 0;
-        if (orderA !== orderB) return orderA - orderB;
 
         return a.name.localeCompare(b.name, "cs");
       });
