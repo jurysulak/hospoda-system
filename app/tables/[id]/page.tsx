@@ -31,14 +31,14 @@ interface Order {
   items: OrderItem[];
 }
 
-interface TableData {  
-  id: number;  
-  name: string;  
-  section?: string | null;  
+interface TableData {
+  id: number;
+  name: string;
+  section?: string | null;
   isReserved?: boolean | null;
   customerName?: string | null;
   reservationTime?: string | null;
-  orders: Order[];  
+  orders: Order[];
 }
 
 const CATEGORY_PRIORITY: Record<string, number> = {
@@ -123,7 +123,7 @@ export default function TableDetailPage() {
           setAllTables(data.filter((t) => t.id !== Number(tableId)));
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [tableId]);
 
   const handleTransfer = async () => {
@@ -442,11 +442,10 @@ export default function TableDetailPage() {
                 setReserveTime(table?.reservationTime || "");
                 setIsReserveModalOpen(true);
               }}
-              className={`rounded-xl px-3 py-2 text-xs sm:text-sm font-black transition active:scale-95 cursor-pointer shadow-xs ${
-                table?.isReserved
+              className={`rounded-xl px-3 py-2 text-xs sm:text-sm font-black transition active:scale-95 cursor-pointer shadow-xs ${table?.isReserved
                   ? "bg-amber-400 text-slate-950 hover:bg-amber-500"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-              }`}
+                }`}
             >
               📅 {table?.isReserved ? "Rezervováno" : "Rezervace"}
             </button>
@@ -460,10 +459,6 @@ export default function TableDetailPage() {
             >
               🔀 Přesunout
             </button>
-
-            <span className="text-sm font-black text-slate-700 bg-slate-100 px-3.5 py-2 rounded-xl border border-slate-200/60">
-              Položek: {servedItems.reduce((acc, i) => acc + i.quantity, 0)}
-            </span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -693,14 +688,18 @@ export default function TableDetailPage() {
                   key={p.id}
                   type="button"
                   onClick={() => handleAddProductById(p.id)}
-                  className="p-3.5 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 active:scale-95 text-left flex flex-col justify-between min-h-[86px] transition cursor-pointer shadow-2xs"
+                  className="p-3.5 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 active:scale-95 text-left flex flex-col justify-between min-h-[96px] h-auto transition cursor-pointer shadow-xs"
                 >
-                  <span className="font-bold text-sm sm:text-base text-slate-900 line-clamp-2 leading-tight">
+                  <span className="font-bold text-sm text-slate-900 leading-snug break-words">
                     {p.name}
                   </span>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className="text-xs text-slate-400 font-semibold">{p.category}</span>
-                    <span className="font-black text-sm sm:text-base text-slate-900">{p.price} Kč</span>
+                  <div className="flex items-center justify-between mt-2 pt-1 border-t border-slate-100">
+                    <span className="text-xs text-slate-400 font-semibold truncate mr-2">
+                      {p.category}
+                    </span>
+                    <span className="font-black text-sm text-slate-900 shrink-0">
+                      {p.price} Kč
+                    </span>
                   </div>
                 </button>
               ))}
@@ -767,11 +766,10 @@ export default function TableDetailPage() {
                   key={t.id}
                   type="button"
                   onClick={() => setSelectedTargetTable(t.id)}
-                  className={`w-full p-3 rounded-xl border text-left font-bold text-sm flex items-center justify-between transition cursor-pointer ${
-                    selectedTargetTable === t.id
+                  className={`w-full p-3 rounded-xl border text-left font-bold text-sm flex items-center justify-between transition cursor-pointer ${selectedTargetTable === t.id
                       ? "border-slate-900 bg-slate-900 text-white"
                       : "border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800"
-                  }`}
+                    }`}
                 >
                   <span>{t.name}</span>
                   <span className="text-xs font-semibold opacity-70">{t.section}</span>
