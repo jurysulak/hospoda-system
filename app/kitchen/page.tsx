@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
+import { printKitchenSummaryViaRawBT } from "@/lib/printReceipt";
 
 type KitchenItem = {
   id: number;
@@ -25,6 +26,7 @@ export default function KitchenPage() {
   const [now, setNow] = useState<Date>(new Date());
   const [showCompleted, setShowCompleted] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
 
   const isInitialLoadRef = useRef(true);
   const prevPendingItemIdsRef = useRef<Set<number>>(new Set());
@@ -212,6 +214,26 @@ export default function KitchenPage() {
 
   const displayedTickets = showCompleted ? completedTickets : activeTickets;
 
+  // Agregace všech jídel ze všech dnešních ticketů (aktivních i hotových)
+  const kitchenSummary = (() => {
+    const counts: Record<string, number> = {};
+    let totalPortions = 0;
+
+    for (const ticket of tickets) {
+      for (const item of ticket.items) {
+        const cleanName = item.name.trim();
+        counts[cleanName] = (counts[cleanName] || 0) + item.quantity;
+        totalPortions += item.quantity;
+      }
+    }
+
+    const sortedItems = Object.entries(counts)
+      .map(([name, quantity]) => ({ name, quantity }))
+      .sort((a, b) => b.quantity - a.quantity);
+
+    return { sortedItems, totalPortions };
+  })();
+
   return (
     <main
       onClick={unlockAudio}
@@ -230,7 +252,18 @@ export default function KitchenPage() {
           </h1>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsSummaryOpen(true);
+            }}
+            className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+          >
+            📊 Souhrn dne ({kitchenSummary.totalPortions})
+          </button>
+
           {/* Tlačítko zvuku */}
           <button
             type="button"
@@ -296,7 +329,9 @@ export default function KitchenPage() {
           <div className="h-96 flex flex-col items-center justify-center text-center text-slate-500">
             <span className="text-5xl mb-3">{showCompleted ? "📦" : "👨‍🍳"}</span>
             <p className="text-xl font-bold text-slate-400">
-              {showCompleted ? "Žádná kompletně vydaná jídla" : "Všechna jídla jsou vydána!"}
+              {showCompleted
+                ? "Žádná kompletně vydaná jídla"
+                : "Všechna jídla jsou vydána!"}
             </p>
           </div>
         ) : (
@@ -314,8 +349,8 @@ export default function KitchenPage() {
                     isUrgent
                       ? "bg-red-950/40 border-red-500/80 ring-2 ring-red-500/50"
                       : isWarning
-                      ? "bg-amber-950/40 border-amber-500/80"
-                      : "bg-slate-900 border-slate-800"
+                        ? "bg-amber-950/40 border-amber-500/80"
+                        : "bg-slate-900 border-slate-800"
                   }`}
                 >
                   <div className="p-4 border-b border-slate-800/80 flex items-start justify-between">
@@ -334,8 +369,8 @@ export default function KitchenPage() {
                           isUrgent
                             ? "bg-red-500 text-white animate-pulse"
                             : isWarning
-                            ? "bg-amber-500 text-slate-950"
-                            : "bg-slate-800 text-slate-300"
+                              ? "bg-amber-500 text-slate-950"
+                              : "bg-slate-800 text-slate-300"
                         }`}
                       >
                         ⏱ {waitMins} min
@@ -409,6 +444,79 @@ export default function KitchenPage() {
           </div>
         )}
       </div>
+
+      {/* Modální okno: Denní souhrn kuchyně */}
+      {isSummaryOpen && (
+        <div
+          onClick={() => setIsSummaryOpen(false)}
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col text-white shadow-2xl"
+          >
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-black">📊 Denní souhrn kuchyně</h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Přehled všech objednaných a vydaných pokrmů za dnešek
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSummaryOpen(false)}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm cursor-pointer"
+              >
+                ✕ Zavřít
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto flex-1 space-y-2">
+              {kitchenSummary.sortedItems.length === 0 ? (
+                <p className="text-slate-400 text-center py-8">
+                  Zatím nebyly do kuchyně zadány žádné položky.
+                </p>
+              ) : (
+                kitchenSummary.sortedItems.map((item) => (
+                  <div
+                    key={item.name}
+                    className="flex items-center justify-between p-3 rounded-xl bg-slate-800/80 border border-slate-700/60"
+                  >
+                    <span className="font-semibold text-slate-100 pr-3">
+                      {item.name}
+                    </span>
+                    <span className="px-3 py-1 rounded-lg bg-amber-500/20 text-amber-400 font-black text-base shrink-0">
+                      {item.quantity}×
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="p-5 border-t border-slate-800 bg-slate-950/60 rounded-b-2xl flex items-center justify-between gap-3">
+              <div>
+                <span className="text-xs text-slate-400 block">Celkem porcí</span>
+                <span className="text-xl font-black text-amber-400">
+                  {kitchenSummary.totalPortions} ks
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  printKitchenSummaryViaRawBT({
+                    items: kitchenSummary.sortedItems,
+                    totalPortions: kitchenSummary.totalPortions,
+                  })
+                }
+                className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition cursor-pointer shadow-md"
+              >
+                🖨️ Vytisknout souhrn (RawBT)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

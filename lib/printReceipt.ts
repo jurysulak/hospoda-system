@@ -181,3 +181,59 @@ export function printDailySummaryViaRawBT(summary: SummaryPrintParams) {
   const rawText = lines.join("\n");
   window.location.href = `rawbt:${encodeURIComponent(rawText)}`;
 }
+
+export function printKitchenSummaryViaRawBT(params: {
+  items: { name: string; quantity: number }[];
+  totalPortions: number;
+  date?: Date;
+}) {
+  const dateObj = params.date || new Date();
+  const dateStr = dateObj.toLocaleDateString("cs-CZ");
+  const timeStr = dateObj.toLocaleTimeString("cs-CZ", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const line = "--------------------------------";
+  const lines: string[] = [
+    "     DENNI SOUHRN - KUCHYNE     ",
+    line,
+    `Datum: ${dateStr}  Cas: ${timeStr}`,
+    line,
+    "POLOZKA                    POCET",
+    line,
+  ];
+
+  if (params.items.length === 0) {
+    lines.push("Zatim zadne vydane pokrmy.");
+  } else {
+    for (const item of params.items) {
+      const qtyStr = `${item.quantity}x`;
+      const maxNameLen = 32 - qtyStr.length - 1;
+      const cleanName =
+        item.name.length > maxNameLen
+          ? item.name.slice(0, maxNameLen - 1) + "."
+          : item.name;
+      const spaces = " ".repeat(Math.max(1, 32 - cleanName.length - qtyStr.length));
+      lines.push(`${cleanName}${spaces}${qtyStr}`);
+    }
+  }
+
+  lines.push(line);
+  const totalLabel = "CELKEM PORCI:";
+  const totalVal = `${params.totalPortions} ks`;
+  const totalSpaces = " ".repeat(Math.max(1, 32 - totalLabel.length - totalVal.length));
+  lines.push(`${totalLabel}${totalSpaces}${totalVal}`);
+  lines.push(line);
+  lines.push("\n\n\n");
+
+  const receiptText = lines.join("\n");
+  const utf8Bytes = new TextEncoder().encode(receiptText);
+  let binary = "";
+  for (let i = 0; i < utf8Bytes.length; i++) {
+    binary += String.fromCharCode(utf8Bytes[i]);
+  }
+  const base64Text = btoa(binary);
+
+  window.location.href = `rawbt:base64,${base64Text}`;
+}
