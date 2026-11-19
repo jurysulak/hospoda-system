@@ -1,12 +1,21 @@
-﻿import pg from 'pg';
+﻿import 'dotenv/config';
+import pg from 'pg';
+
+// Přístupy se čtou z .env (OLD_DATABASE_URL = zdroj, NEW_DATABASE_URL = cíl).
+// Nikdy je nepiš přímo do kódu.
+const { OLD_DATABASE_URL, NEW_DATABASE_URL } = process.env;
+if (!OLD_DATABASE_URL || !NEW_DATABASE_URL) {
+  console.error('Chybí OLD_DATABASE_URL nebo NEW_DATABASE_URL v .env');
+  process.exit(1);
+}
 
 const oldDb = new pg.Pool({
-  connectionString: 'postgresql://postgres:OnsBtVOvJhyBHthGxWjjluGYxBGOaBwY@switchback.proxy.rlwy.net:40291/railway',
+  connectionString: OLD_DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
 const newDb = new pg.Pool({
-  connectionString: 'postgresql://neondb_owner:npg_2In9jJOxDeBL@ep-fragrant-term-bau4io48.c-8.eu-central-1.aws.neon.tech/neondb?sslmode=require',
+  connectionString: NEW_DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
