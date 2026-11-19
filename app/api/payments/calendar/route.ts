@@ -20,6 +20,8 @@ export async function GET(request: Request) {
                     gte: startOfMonth,
                     lte: endOfMonth,
                 },
+                // Stornované platby se do tržeb nezapočítávají
+                cancelledAt: null,
             },
             include: {
                 order: {

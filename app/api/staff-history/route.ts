@@ -9,6 +9,7 @@ export async function GET(req: Request) {
     const dateParam = searchParams.get("date"); // YYYY-MM-DD nebo prázdné pro vše
 
     const whereClause: any = {
+      cancelledAt: null,
       order: {
         table: {
           name: "Personál",

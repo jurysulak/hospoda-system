@@ -187,9 +187,10 @@ export function printKitchenSummaryViaRawBT(params: {
   totalPortions: number;
   date?: Date;
 }) {
+  // Datum = den, za který je souhrn; čas = kdy se tiskne
   const dateObj = params.date || new Date();
   const dateStr = dateObj.toLocaleDateString("cs-CZ");
-  const timeStr = dateObj.toLocaleTimeString("cs-CZ", {
+  const timeStr = new Date().toLocaleTimeString("cs-CZ", {
     hour: "2-digit",
     minute: "2-digit",
   });

@@ -36,6 +36,8 @@ export async function GET(req: Request) {
           gte: startOfDay,
           lte: endOfDay,
         },
+        // Stornované platby se do tržeb nezapočítávají
+        cancelledAt: null,
         // Vyřazení stolu Personál z tržeb a denního souhrnu
         order: {
           table: {

@@ -52,6 +52,8 @@ export async function GET(req: Request) {
           gte: startDate,
           lte: endDate,
         },
+        // Stornované účty se nepočítají (jejich položky se vrátily na stůl jako nový účet)
+        status: { not: "cancelled" },
       },
       include: {
         table: true,

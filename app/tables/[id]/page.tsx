@@ -587,12 +587,13 @@ export default function TableDetailPage() {
                       <div className="flex items-center gap-3 min-w-0">
                         {splitMode ? (
                           <span
-                            className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black shrink-0 ${isSplitChosen
+                            className={`min-w-9 h-9 px-1.5 rounded-xl flex items-center justify-center text-sm font-black shrink-0 whitespace-nowrap ${isSplitChosen
                               ? "bg-amber-500 text-slate-950"
                               : "bg-slate-200 text-slate-500"
                               }`}
                           >
                             {splitSelected[item.id] || 0}
+                            <span className="opacity-60 font-bold">/{item.quantity}</span>
                           </span>
                         ) : (
                           <span className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center text-sm font-black shrink-0 shadow-2xs">

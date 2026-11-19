@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { printKitchenSummaryViaRawBT } from "@/lib/printReceipt";
 
 interface DayDishStat {
   count: number;
@@ -293,6 +294,24 @@ export default function KitchenHistoryPage() {
                       {selectedDayDetail.totalRevenue.toLocaleString("cs-CZ")} Kč
                     </span>
                   </div>
+                )}
+                {selectedDayDetail && Object.keys(selectedDayDetail.dishes).length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const [y, m, d] = selectedDayDetail.date.split("-").map(Number);
+                      printKitchenSummaryViaRawBT({
+                        items: Object.entries(selectedDayDetail.dishes)
+                          .map(([name, stat]) => ({ name, quantity: stat.count }))
+                          .sort((a, b) => b.quantity - a.quantity),
+                        totalPortions: selectedDayDetail.totalDishes,
+                        date: new Date(y, m - 1, d),
+                      });
+                    }}
+                    className="mt-3 w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition active:scale-95 cursor-pointer"
+                  >
+                    🖨️ Vytisknout souhrn dne
+                  </button>
                 )}
               </div>
 

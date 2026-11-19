@@ -58,7 +58,7 @@ model Product {
 model Order {
   id             Int             @id @default(autoincrement())
   tableId        Int
-  status         String          @default("open") // "open", "paid", "cancelled"
+  status         String          @default("open") // "open", "closed", "cancelled" (zaplaceno a pak stornováno)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   closedAt       DateTime?
@@ -92,6 +92,7 @@ model Payment {
   amount        Int
   paymentMethod String? // "cash", "card", "voucher"
   receiptNumber String? // <-- Přidej tento řádek
+  cancelledAt   DateTime? // Kdy byla platba stornována (null = platná). Stornované se nezapočítávají do tržeb.
   createdAt     DateTime @default(now())
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)

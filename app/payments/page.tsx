@@ -11,6 +11,7 @@ type PaymentRecord = {
   paymentMethod: string;
   createdAt: string;
   receiptNumber?: string | null;
+  cancelledAt?: string | null;
   order: {
     id: number;
     table: {
@@ -55,11 +56,10 @@ export default function PaymentsPage() {
   // Provedení storna
   const handleRefund = async (payment: PaymentRecord) => {
     const tableName = payment.order?.table?.name || "Neznámý stůl";
-    if (
-      !window.confirm(
-        `Opravdu chceš STORNOVAT platbu ${payment.amount} Kč (${tableName})?\n\nStůl bude znovu otevřen pro úpravu účtu.`
-      )
-    ) {
+    const code = window.prompt(
+      `STORNO platby ${payment.amount} Kč (${tableName})\n\nPoložky se vrátí zpět na stůl.\nZadej kód storna:`
+    );
+    if (code === null || code.trim() === "") {
       return;
     }
 
@@ -67,11 +67,12 @@ export default function PaymentsPage() {
       setIsRefunding(payment.id);
       const res = await fetch(`/api/payments/${payment.id}/refund`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: code.trim() }),
       });
 
       if (res.ok) {
         const data = await res.json();
-        alert("Platba byla úspěšně stornována a stůl je znovu otevřen.");
         if (data.tableId) {
           router.push(`/tables/${data.tableId}`);
         } else {
@@ -160,9 +161,17 @@ export default function PaymentsPage() {
                       minute: "2-digit",
                     });
                     const date = new Date(p.createdAt).toLocaleDateString("cs-CZ");
+                    const isCancelled = Boolean(p.cancelledAt);
 
                     return (
-                      <tr key={p.id} className="hover:bg-slate-50/60 transition">
+                      <tr
+                        key={p.id}
+                        className={`transition ${
+                          isCancelled
+                            ? "bg-red-50/40 text-slate-400 line-through decoration-red-500/70 decoration-2"
+                            : "hover:bg-slate-50/60"
+                        }`}
+                      >
                         <td className="px-5 py-3.5">
                           <span className="font-bold text-slate-900 block">{time}</span>
                           <span className="text-[11px] text-slate-400">{date}</span>
@@ -202,15 +211,24 @@ export default function PaymentsPage() {
                               <span>Kopie</span>
                             </button>
 
-                            {/* Původní tlačítko storno */}
-                            <button
-                              type="button"
-                              onClick={() => handleRefund(p)}
-                              disabled={isRefunding === p.id}
-                              className="rounded-xl border border-red-300 bg-red-50 hover:bg-red-100 px-3 py-1.5 text-xs font-black text-red-700 transition active:scale-95 cursor-pointer disabled:opacity-50"
-                            >
-                              {isRefunding === p.id ? "Stornuji..." : "⚠️ Stornovat"}
-                            </button>
+                            {isCancelled ? (
+                              <span
+                                className="inline-block no-underline rounded-xl bg-red-600 px-3 py-1.5 text-xs font-black text-white"
+                                style={{ textDecoration: "none" }}
+                                title={`Stornováno ${new Date(p.cancelledAt as string).toLocaleString("cs-CZ")}`}
+                              >
+                                STORNO
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleRefund(p)}
+                                disabled={isRefunding === p.id}
+                                className="rounded-xl border border-red-300 bg-red-50 hover:bg-red-100 px-3 py-1.5 text-xs font-black text-red-700 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                              >
+                                {isRefunding === p.id ? "Stornuji..." : "⚠️ Stornovat"}
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
