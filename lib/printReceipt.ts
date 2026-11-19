@@ -195,14 +195,14 @@ export function printKitchenSummaryViaRawBT(params: {
     minute: "2-digit",
   });
 
-  const line = "--------------------------------";
+  // Celá šíře 80mm papíru (48 znaků), stejně jako účtenky a denní uzávěrka
   const lines: string[] = [
-    "     DENNI SOUHRN - KUCHYNE     ",
-    line,
-    `Datum: ${dateStr}  Cas: ${timeStr}`,
-    line,
-    "POLOZKA                    POCET",
-    line,
+    "\x1b!\x08" + center("DENNI SOUHRN - KUCHYNE") + "\x1b!\x00",
+    divider,
+    justify(`Datum: ${dateStr}`, `Tisk: ${timeStr}`),
+    divider,
+    justify("POLOZKA", "POCET"),
+    divider,
   ];
 
   if (params.items.length === 0) {
@@ -210,33 +210,24 @@ export function printKitchenSummaryViaRawBT(params: {
   } else {
     for (const item of params.items) {
       const qtyStr = `${item.quantity}x`;
-      const maxNameLen = 32 - qtyStr.length - 1;
+      const maxNameLen = LINE_WIDTH - qtyStr.length - 1;
       // Tiskárna neumí české znaky – odstraníme diakritiku (č → c) a cokoli mimo běžné ASCII
       const asciiName = stripAccents(item.name).replace(/[^\x20-\x7E]/g, "");
       const cleanName =
         asciiName.length > maxNameLen
           ? asciiName.slice(0, maxNameLen - 1) + "."
           : asciiName;
-      const spaces = " ".repeat(Math.max(1, 32 - cleanName.length - qtyStr.length));
-      lines.push(`${cleanName}${spaces}${qtyStr}`);
+      lines.push(justify(cleanName, qtyStr));
     }
   }
 
-  lines.push(line);
-  const totalLabel = "CELKEM PORCI:";
-  const totalVal = `${params.totalPortions} ks`;
-  const totalSpaces = " ".repeat(Math.max(1, 32 - totalLabel.length - totalVal.length));
-  lines.push(`${totalLabel}${totalSpaces}${totalVal}`);
-  lines.push(line);
-  lines.push("\n\n\n");
+  lines.push(doubleDivider);
+  lines.push(
+    "\x1b!\x08" + justify("CELKEM PORCI:", `${params.totalPortions} ks`) + "\x1b!\x00"
+  );
+  lines.push(doubleDivider);
+  lines.push("\n\n\n\n");
 
-  const receiptText = lines.join("\n");
-  const utf8Bytes = new TextEncoder().encode(receiptText);
-  let binary = "";
-  for (let i = 0; i < utf8Bytes.length; i++) {
-    binary += String.fromCharCode(utf8Bytes[i]);
-  }
-  const base64Text = btoa(binary);
-
-  window.location.href = `rawbt:base64,${base64Text}`;
+  const rawText = lines.join("\n");
+  window.location.href = `rawbt:${encodeURIComponent(rawText)}`;
 }
