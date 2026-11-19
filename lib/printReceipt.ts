@@ -211,10 +211,12 @@ export function printKitchenSummaryViaRawBT(params: {
     for (const item of params.items) {
       const qtyStr = `${item.quantity}x`;
       const maxNameLen = 32 - qtyStr.length - 1;
+      // Tiskárna neumí české znaky – odstraníme diakritiku (č → c) a cokoli mimo běžné ASCII
+      const asciiName = stripAccents(item.name).replace(/[^\x20-\x7E]/g, "");
       const cleanName =
-        item.name.length > maxNameLen
-          ? item.name.slice(0, maxNameLen - 1) + "."
-          : item.name;
+        asciiName.length > maxNameLen
+          ? asciiName.slice(0, maxNameLen - 1) + "."
+          : asciiName;
       const spaces = " ".repeat(Math.max(1, 32 - cleanName.length - qtyStr.length));
       lines.push(`${cleanName}${spaces}${qtyStr}`);
     }
