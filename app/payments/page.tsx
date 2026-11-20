@@ -53,26 +53,44 @@ export default function PaymentsPage() {
     loadPayments();
   }, []);
 
-  // Provedení storna
-  const handleRefund = async (payment: PaymentRecord) => {
-    const tableName = payment.order?.table?.name || "Neznámý stůl";
-    const code = window.prompt(
-      `STORNO platby ${payment.amount} Kč (${tableName})\n\nPoložky se vrátí zpět na stůl.\nZadej kód storna:`
-    );
-    if (code === null || code.trim() === "") {
-      return;
-    }
+  // Storno – PIN se zadává na dotykové klávesnici (stejně jako u Přehledu tržeb)
+  const [stornoTarget, setStornoTarget] = useState<PaymentRecord | null>(null);
+  const [stornoPin, setStornoPin] = useState("");
+  const [stornoError, setStornoError] = useState("");
+  const MAX_PIN_LENGTH = 8;
+
+  const handleRefund = (payment: PaymentRecord) => {
+    setStornoTarget(payment);
+    setStornoPin("");
+    setStornoError("");
+  };
+
+  const closeStorno = () => {
+    setStornoTarget(null);
+    setStornoPin("");
+    setStornoError("");
+  };
+
+  const pressStornoDigit = (digit: string) => {
+    setStornoError("");
+    setStornoPin((prev) => (prev.length < MAX_PIN_LENGTH ? prev + digit : prev));
+  };
+
+  const confirmStorno = async () => {
+    const payment = stornoTarget;
+    if (!payment || stornoPin.length === 0 || isRefunding !== null) return;
 
     try {
       setIsRefunding(payment.id);
       const res = await fetch(`/api/payments/${payment.id}/refund`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: code.trim() }),
+        body: JSON.stringify({ code: stornoPin }),
       });
 
       if (res.ok) {
         const data = await res.json();
+        closeStorno();
         if (data.tableId) {
           router.push(`/tables/${data.tableId}`);
         } else {
@@ -80,10 +98,18 @@ export default function PaymentsPage() {
         }
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || `Chyba serveru (${res.status})`);
+        if (res.status === 403) {
+          // Špatný kód – nechat okno otevřené a zkusit znovu
+          setStornoError(err.error || "Nesprávný kód storna");
+          setStornoPin("");
+        } else {
+          closeStorno();
+          alert(err.error || `Chyba serveru (${res.status})`);
+          await loadPayments();
+        }
       }
     } catch (e: any) {
-      alert(`Chyba sítě/spojení se serverem: ${e.message || e}`);
+      setStornoError(`Chyba spojení se serverem: ${e.message || e}`);
     } finally {
       setIsRefunding(null);
     }
@@ -240,6 +266,105 @@ export default function PaymentsPage() {
           )}
         </div>
       </div>
+
+      {/* Okno pro zadání kódu storna */}
+      {stornoTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4"
+          onClick={() => isRefunding === null && closeStorno()}
+        >
+          <div
+            className="w-full max-w-xs rounded-3xl bg-slate-800 p-6 shadow-2xl border border-slate-700 text-center space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <div className="w-14 h-14 bg-red-500/20 text-red-400 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-3">
+                🔒
+              </div>
+              <h2 className="text-xl font-black text-white">Storno platby</h2>
+              <p className="text-sm font-bold text-slate-200 mt-1">
+                {stornoTarget.amount} Kč · {stornoTarget.order?.table?.name || "Neznámý stůl"}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                Položky se vrátí na stůl. Zadej kód storna.
+              </p>
+            </div>
+
+            {/* Tečky za zadané číslice */}
+            <div className="flex justify-center gap-3 min-h-4">
+              {Array.from({ length: Math.max(4, stornoPin.length) }).map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-4 h-4 rounded-full transition-all duration-200 ${
+                    stornoError
+                      ? "bg-red-500 scale-110"
+                      : stornoPin.length > i
+                        ? "bg-amber-400 scale-110"
+                        : "bg-slate-700"
+                  }`}
+                />
+              ))}
+            </div>
+
+            {stornoError && (
+              <p className="text-red-400 text-xs font-bold -mt-2">{stornoError}</p>
+            )}
+
+            <div className="grid grid-cols-3 gap-3">
+              {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((num) => (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => pressStornoDigit(num)}
+                  disabled={isRefunding !== null}
+                  className="h-16 rounded-2xl bg-slate-700/80 hover:bg-slate-600 active:scale-95 text-2xl font-black text-white shadow-xs transition cursor-pointer disabled:opacity-50"
+                >
+                  {num}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                onClick={closeStorno}
+                disabled={isRefunding !== null}
+                className="h-16 rounded-2xl bg-slate-700/40 hover:bg-slate-700 active:scale-95 text-xs font-bold text-slate-400 flex items-center justify-center transition cursor-pointer disabled:opacity-50"
+              >
+                Zrušit
+              </button>
+
+              <button
+                type="button"
+                onClick={() => pressStornoDigit("0")}
+                disabled={isRefunding !== null}
+                className="h-16 rounded-2xl bg-slate-700/80 hover:bg-slate-600 active:scale-95 text-2xl font-black text-white shadow-xs transition cursor-pointer disabled:opacity-50"
+              >
+                0
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStornoPin((prev) => prev.slice(0, -1));
+                  setStornoError("");
+                }}
+                disabled={isRefunding !== null}
+                className="h-16 rounded-2xl bg-red-950/40 hover:bg-red-900/60 active:scale-95 text-lg font-black text-red-400 flex items-center justify-center transition cursor-pointer disabled:opacity-50"
+              >
+                ⌫
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={confirmStorno}
+              disabled={stornoPin.length === 0 || isRefunding !== null}
+              className="w-full h-14 rounded-2xl bg-red-600 hover:bg-red-500 active:scale-95 text-base font-black text-white transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isRefunding !== null ? "Stornuji..." : "⚠️ Stornovat"}
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

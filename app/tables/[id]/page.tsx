@@ -17,7 +17,7 @@ interface Product {
 
 interface OrderItem {
   id: number;
-  productId: number;
+  productId: number | null; // null = jednorázová vlastní částka
   productName: string;
   unitPrice: number;
   quantity: number;
@@ -101,6 +101,12 @@ export default function TableDetailPage() {
   const [isReserving, setIsReserving] = useState(false);
 
   const [topProductIds, setTopProductIds] = useState<number[]>([]);
+
+  // Vlastní (jednorázová) částka v sekci Ostatní
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
+  const [customAmount, setCustomAmount] = useState("");
+  const [customName, setCustomName] = useState("");
+  const [isAddingCustom, setIsAddingCustom] = useState(false);
 
   const loadData = async () => {
     try {
@@ -367,6 +373,47 @@ export default function TableDetailPage() {
     }
   };
 
+  // Je aktivní kategorie "Ostatní"? Tam nabízíme dlaždici s vlastní částkou.
+  const isOtherCategory = activeCategory.trim().toLowerCase().startsWith("ostat");
+
+  const openCustomModal = () => {
+    setCustomAmount("");
+    setCustomName("");
+    setIsCustomModalOpen(true);
+  };
+
+  const pressCustomDigit = (digit: string) => {
+    setCustomAmount((prev) => {
+      if (prev === "" && digit === "0") return prev; // žádné úvodní nuly
+      return prev.length < 6 ? prev + digit : prev;
+    });
+  };
+
+  const handleAddCustomAmount = async () => {
+    const amount = parseInt(customAmount, 10);
+    if (!amount || amount < 1 || isAddingCustom) return;
+    setIsAddingCustom(true);
+    try {
+      const res = await fetch(`/api/tables/${tableId}/items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customAmount: amount, customName: customName.trim() }),
+      });
+      if (res.ok) {
+        setIsCustomModalOpen(false);
+        await loadData();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || `Chyba serveru (${res.status})`);
+      }
+    } catch (e) {
+      console.error("Chyba při přidávání vlastní částky:", e);
+      alert("Chyba spojení se serverem");
+    } finally {
+      setIsAddingCustom(false);
+    }
+  };
+
   // Odebrání 1 kusu z účtu
   const handleRemoveSingleItem = async (itemId: number) => {
     try {
@@ -573,7 +620,7 @@ export default function TableDetailPage() {
                       onClick={() => {
                         if (splitMode) {
                           handleToggleSplitSelect(item.id, item.quantity);
-                        } else {
+                        } else if (item.productId !== null) {
                           handleAddProductById(item.productId);
                         }
                       }}
@@ -629,17 +676,19 @@ export default function TableDetailPage() {
                             >
                               -
                             </button>
+                            {item.productId !== null && (
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleAddProductById(item.productId);
+                                if (item.productId !== null) handleAddProductById(item.productId);
                               }}
                               className="w-8 h-8 rounded-lg bg-emerald-100 hover:bg-emerald-200 active:scale-95 text-emerald-800 font-black text-base flex items-center justify-center transition cursor-pointer"
                               title="Přidat kus"
                             >
                               +
                             </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -755,6 +804,21 @@ export default function TableDetailPage() {
             {/* Mřížka položek nabídky */}
             {/* Mřížka tlačítek s produkty */}
             <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2 pr-1 min-h-0 content-start">
+              {isOtherCategory && !searchQuery.trim() && (
+                <button
+                  type="button"
+                  onClick={openCustomModal}
+                  className="p-3.5 rounded-2xl border-2 border-dashed border-amber-400 bg-amber-50 hover:bg-amber-100 active:scale-95 text-left flex flex-col justify-between min-h-[96px] h-auto transition cursor-pointer shadow-xs"
+                >
+                  <span className="font-bold text-sm text-slate-900 leading-snug">
+                    ✏️ Vlastní částka
+                  </span>
+                  <div className="flex items-center justify-between mt-2 pt-1 border-t border-amber-200">
+                    <span className="text-xs text-amber-700 font-semibold">Jednorázově</span>
+                    <span className="font-black text-sm text-slate-900">? Kč</span>
+                  </div>
+                </button>
+              )}
               {displayedProducts.map((p) => (
                 <button
                   key={p.id}
@@ -779,6 +843,78 @@ export default function TableDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal pro vlastní (jednorázovou) částku */}
+      {isCustomModalOpen && (
+        <div
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-center justify-center overflow-y-auto p-4"
+          onClick={() => !isAddingCustom && setIsCustomModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-xs rounded-3xl bg-white p-5 shadow-2xl border border-slate-200 text-center space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-black text-slate-900">Vlastní částka</h3>
+
+            <div className="rounded-2xl bg-slate-100 py-3 text-3xl font-black text-slate-900 tracking-tight">
+              {customAmount ? Number(customAmount).toLocaleString("cs-CZ") : "0"} Kč
+            </div>
+
+            <input
+              type="text"
+              value={customName}
+              onChange={(e) => setCustomName(e.target.value)}
+              placeholder="Popis (nepovinné)"
+              maxLength={60}
+              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+            />
+
+            <div className="grid grid-cols-3 gap-2">
+              {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((num) => (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => pressCustomDigit(num)}
+                  className="h-14 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-2xl font-black text-slate-900 transition cursor-pointer"
+                >
+                  {num}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setIsCustomModalOpen(false)}
+                disabled={isAddingCustom}
+                className="h-14 rounded-2xl bg-slate-50 hover:bg-slate-100 active:scale-95 text-xs font-bold text-slate-500 transition cursor-pointer"
+              >
+                Zrušit
+              </button>
+              <button
+                type="button"
+                onClick={() => pressCustomDigit("0")}
+                className="h-14 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-2xl font-black text-slate-900 transition cursor-pointer"
+              >
+                0
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomAmount((prev) => prev.slice(0, -1))}
+                className="h-14 rounded-2xl bg-red-50 hover:bg-red-100 active:scale-95 text-lg font-black text-red-600 transition cursor-pointer"
+              >
+                ⌫
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleAddCustomAmount}
+              disabled={!customAmount || isAddingCustom}
+              className="w-full h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-base font-black text-white transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isAddingCustom ? "Přidávám..." : "Přidat na stůl"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Platební modal */}
       {isPayModalOpen && (

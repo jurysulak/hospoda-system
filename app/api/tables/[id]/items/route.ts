@@ -17,6 +17,40 @@ export async function POST(
     }
 
     const body = await request.json();
+
+    // Jednorázová položka s vlastní částkou (sekce Ostatní) – bez vazby na produkt
+    if (body.customAmount !== undefined) {
+      const amount = Number(body.customAmount);
+      if (!Number.isInteger(amount) || amount < 1 || amount > 100000) {
+        return NextResponse.json({ error: "Neplatná částka" }, { status: 400 });
+      }
+      const name =
+        typeof body.customName === "string" && body.customName.trim() !== ""
+          ? body.customName.trim().slice(0, 60)
+          : "Vlastní částka";
+
+      let customOrder = await prisma.order.findFirst({
+        where: { tableId, status: "open" },
+      });
+      if (!customOrder) {
+        customOrder = await prisma.order.create({
+          data: { tableId, status: "open" },
+        });
+      }
+
+      const customItem = await prisma.orderItem.create({
+        data: {
+          orderId: customOrder.id,
+          productId: null,
+          productName: name,
+          unitPrice: amount,
+          quantity: 1,
+          status: "SERVED",
+        },
+      });
+      return NextResponse.json(customItem, { status: 201 });
+    }
+
     const { productId, quantity = 1, note } = body;
     const prodId = parseInt(String(productId), 10);
     const qtyToAdd = Number(quantity) || 1;
