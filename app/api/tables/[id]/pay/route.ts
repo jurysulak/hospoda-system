@@ -1,6 +1,7 @@
 // app/api/tables/[id]/pay/route.ts
 import { prisma } from "@/lib/prisma";
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
+import { eetEnabled, sendNewAndFlush } from "@/lib/eet/send";
 
 export const dynamic = "force-dynamic";
 
@@ -137,7 +138,8 @@ export async function POST(
           });
         }
 
-        return payment;
+        const eetId = await createEetRecord(tx, payment);
+        return { payment, eetId };
       } else {
         // Platba celého stolu najednou
         const payment = await tx.payment.create({
@@ -161,11 +163,15 @@ export async function POST(
           data: { status: "open" },
         });
 
-        return payment;
+        const eetId = await createEetRecord(tx, payment);
+        return { payment, eetId };
       }
     });
 
-    return NextResponse.json({ success: true, payment: result });
+    // EET: odeslání až po odpovědi, ať obsluha nečeká na finanční správu
+    if (result.eetId !== null) after(() => sendNewAndFlush(result.eetId));
+
+    return NextResponse.json({ success: true, payment: result.payment });
   } catch (error) {
     console.error("Chyba při platbě:", error);
     return NextResponse.json(
@@ -173,4 +179,15 @@ export async function POST(
       { status: 500 }
     );
   }
+}
+// Záznam evidované tržby vzniká ve stejné transakci jako platba – nic se neztratí ani při výpadku.
+async function createEetRecord(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  payment: { id: number; amount: number; createdAt: Date }
+): Promise<number | null> {
+  if (!eetEnabled()) return null;
+  const rec = await tx.eetRecord.create({
+    data: { paymentId: payment.id, kind: "SALE", amount: payment.amount, datTrzby: payment.createdAt },
+  });
+  return rec.id;
 }

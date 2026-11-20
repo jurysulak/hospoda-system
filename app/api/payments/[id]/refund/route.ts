@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
+import { eetEnabled, sendNewAndFlush } from "@/lib/eet/send";
 import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 
@@ -52,14 +53,22 @@ export async function POST(
     const paidOrder = payment.order;
     const tableId = paidOrder.tableId;
 
-    await prisma.$transaction(async (tx) => {
+    const eetId = await prisma.$transaction(async (tx) => {
       // 1. Platba zůstává v historii, jen se označí jako stornovaná
       //    (podmínka cancelledAt: null brání dvojímu stornu při dvojkliku)
+      const cancelledAt = new Date();
       const marked = await tx.payment.updateMany({
         where: { id: paymentId, cancelledAt: null },
-        data: { cancelledAt: new Date() },
+        data: { cancelledAt },
       });
       if (marked.count === 0) throw new Error("ALREADY_CANCELLED");
+
+      // EET: storno = nová tržba se zápornou částkou v okamžiku vrácení peněz (bez vazby na původní zprávu)
+      const eetRec = eetEnabled()
+        ? await tx.eetRecord.create({
+            data: { paymentId, kind: "STORNO", amount: -payment.amount, datTrzby: cancelledAt },
+          })
+        : null;
 
       // 2. Zaplacený účet se označí jako stornovaný (položky v něm zůstanou kvůli historii a kopii účtenky)
       await tx.order.update({
@@ -96,7 +105,11 @@ export async function POST(
         where: { id: tableId },
         data: { status: "occupied" },
       });
+
+      return eetRec?.id ?? null;
     });
+
+    if (eetId !== null) after(() => sendNewAndFlush(eetId));
 
     return NextResponse.json({ success: true, tableId }, { status: 200 });
   } catch (error) {

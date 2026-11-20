@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { printReceiptViaRawBT } from "@/lib/printReceipt";
+import EetStatusBanner from "./EetStatusBanner";
 
 type PaymentRecord = {
   id: number;
@@ -156,6 +157,8 @@ export default function PaymentsPage() {
             Zobrazeno {payments.length} posledních plateb
           </span>
         </div>
+
+        <EetStatusBanner />
 
         {/* Tabulka plateb */}
         <div className="rounded-3xl bg-white shadow-xs border border-slate-200 overflow-hidden">

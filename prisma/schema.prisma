@@ -95,7 +95,30 @@ model Payment {
   cancelledAt   DateTime? // Kdy byla platba stornována (null = platná). Stornované se nezapočítávají do tržeb.
   createdAt     DateTime @default(now())
 
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  eetRecords EetRecord[]
+}
+
+// Evidence tržeb EET 2.0 – jeden záznam = jedna evidovaná tržba (platba nebo její storno se zápornou částkou).
+// Pořadové číslo tržby (porad_cis) = id záznamu.
+model EetRecord {
+  id            Int       @id @default(autoincrement())
+  paymentId     Int?      // null po smazání stolu – záznam o evidované tržbě musí zůstat
+  kind          String    // "SALE" | "STORNO"
+  amount        Int       // Kč, u storna záporně
+  datTrzby      DateTime  // okamžik uskutečnění tržby
+  status        String    @default("PENDING") // "PENDING" | "SENT" | "ERROR"
+  pok           String?   // potvrzovací kód z EET
+  test          Boolean   @default(false) // odesláno do testovacího prostředí (playground)
+  attempts      Int       @default(0)
+  lastError     String?
+  lastAttemptAt DateTime?
+  sentAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([status])
 }
 
 // -------------------------------------------------------------
