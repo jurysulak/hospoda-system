@@ -101,36 +101,28 @@ export async function DELETE(
       return NextResponse.json({ error: "Neplatné ID stolu" }, { status: 400 });
     }
 
-    // Kaskádové pročištění navázaných dat a smazání stolu
     await prisma.$transaction(async (tx) => {
-      // 1. Najdeme ID všech objednávek tohoto stolu
-      const orders = await tx.order.findMany({
-        where: { tableId },
+      // 1. Nezaplacené (otevřené) účty stolu se zahodí, jako dřív
+      const openOrders = await tx.order.findMany({
+        where: { tableId, status: "open", payments: { none: {} } },
         select: { id: true },
       });
-      const orderIds = orders.map((o) => o.id);
-
-      if (orderIds.length > 0) {
-        // 2. Smažeme položky těchto objednávek
-        await tx.orderItem.deleteMany({
-          where: { orderId: { in: orderIds } },
-        });
-
-        // 3. Smažeme navázané platby
-        await tx.payment.deleteMany({
-          where: { orderId: { in: orderIds } },
-        });
-
-        // 4. Smažeme samotné objednávky
-        await tx.order.deleteMany({
-          where: { id: { in: orderIds } },
-        });
+      const openIds = openOrders.map((o) => o.id);
+      if (openIds.length > 0) {
+        await tx.orderItem.deleteMany({ where: { orderId: { in: openIds } } });
+        await tx.order.deleteMany({ where: { id: { in: openIds } } });
       }
 
-      // 5. Nakonec smažeme stůl
-      await tx.table.delete({
-        where: { id: tableId },
-      });
+      // 2. Má stůl historii plateb? Pak se jen skryje – tržby a záznamy EET musí zůstat.
+      const remaining = await tx.order.count({ where: { tableId } });
+      if (remaining > 0) {
+        await tx.table.update({
+          where: { id: tableId },
+          data: { deletedAt: new Date(), status: "open", reservedName: null, reservedTime: null, reservedPax: null },
+        });
+      } else {
+        await tx.table.delete({ where: { id: tableId } });
+      }
     });
 
     return NextResponse.json({ success: true });

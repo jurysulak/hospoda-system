@@ -9,6 +9,7 @@ export async function GET(request: Request) {
     // 1. Zkusíme najít existující stůl s názvem BAR
     let barTable = await prisma.table.findFirst({
       where: {
+        deletedAt: null,
         name: {
           equals: "BAR",
           mode: "insensitive",

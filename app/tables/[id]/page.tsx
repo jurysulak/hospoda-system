@@ -35,9 +35,9 @@ interface TableData {
   id: number;
   name: string;
   section?: string | null;
-  isReserved?: boolean | null;
-  customerName?: string | null;
-  reservationTime?: string | null;
+  status?: string | null;
+  reservedName?: string | null;
+  reservedTime?: string | null;
   orders: Order[];
 }
 
@@ -117,7 +117,9 @@ export default function TableDetailPage() {
       ]);
 
       if (tableRes.ok) setTable(await tableRes.json());
-      if (prodRes.ok) setProducts(await prodRes.json());
+      // Tělo odpovědi jde přečíst jen jednou – uložíme si ho pro výpočet Oblíbených
+      const prods: Product[] = prodRes.ok ? await prodRes.json() : [];
+      if (prodRes.ok) setProducts(prods);
 
       // Spočítáme nejprodávanější produkty z plateb
       if (paymentsRes.ok) {
@@ -126,6 +128,7 @@ export default function TableDetailPage() {
 
         if (Array.isArray(paymentsData)) {
           for (const p of paymentsData) {
+            if (p.cancelledAt) continue; // stornované platby se do oblíbených nepočítají
             for (const it of p.order?.items || []) {
               salesCounts[it.productName] = (salesCounts[it.productName] || 0) + it.quantity;
             }
@@ -138,8 +141,7 @@ export default function TableDetailPage() {
           .map(([name]) => name);
 
         // Přiřadíme odpovídající ID produktů
-        if (prodRes.ok) {
-          const prods: Product[] = await prodRes.clone().json();
+        if (prods.length > 0) {
           const ids = sortedNames
             .map((name) => prods.find((pr) => pr.name.toLowerCase() === name.toLowerCase())?.id)
             .filter((id): id is number => id !== undefined);
@@ -556,16 +558,16 @@ export default function TableDetailPage() {
             <button
               type="button"
               onClick={() => {
-                setReserveName(table?.customerName || "");
-                setReserveTime(table?.reservationTime || "");
+                setReserveName(table?.reservedName || "");
+                setReserveTime(table?.reservedTime || "");
                 setIsReserveModalOpen(true);
               }}
-              className={`rounded-xl px-3 py-2 text-xs sm:text-sm font-black transition active:scale-95 cursor-pointer shadow-xs ${table?.isReserved
+              className={`rounded-xl px-3 py-2 text-xs sm:text-sm font-black transition active:scale-95 cursor-pointer shadow-xs ${table?.status === "reserved"
                   ? "bg-amber-400 text-slate-950 hover:bg-amber-500"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                 }`}
             >
-              📅 {table?.isReserved ? "Rezervováno" : "Rezervace"}
+              📅 {table?.status === "reserved" ? "Rezervováno" : "Rezervace"}
             </button>
 
             {/* Tlačítko Přesunout stůl */}
@@ -1049,7 +1051,7 @@ export default function TableDetailPage() {
                 {isReserving ? "Ukládám..." : "Uložit rezervaci"}
               </button>
 
-              {table?.isReserved && (
+              {table?.status === "reserved" && (
                 <button
                   type="button"
                   onClick={() => handleSaveReservation(false)}

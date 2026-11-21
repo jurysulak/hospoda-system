@@ -9,7 +9,7 @@ export async function GET(req: Request) {
     const section = searchParams.get("section");
 
     const tables = await prisma.table.findMany({
-      where: section ? { section } : undefined,
+      where: { deletedAt: null, ...(section ? { section } : {}) },
       orderBy: { id: "asc" },
       include: {
         orders: {

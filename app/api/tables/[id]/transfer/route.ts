@@ -56,7 +56,7 @@ export async function POST(
       },
     });
 
-    if (!targetTable) {
+    if (!targetTable || targetTable.deletedAt) {
       return NextResponse.json(
         { error: "Cílový stůl neexistuje" },
         { status: 404 }

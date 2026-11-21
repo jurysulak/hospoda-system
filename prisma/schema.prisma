@@ -28,6 +28,7 @@ model Table {
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  deletedAt    DateTime? // Smazaný stůl s historií plateb se jen skryje (tržby musí zůstat)
 
   orders       Order[]
 }

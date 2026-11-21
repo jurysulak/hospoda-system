@@ -8,6 +8,7 @@ export async function GET(request: Request) {
   try {
     let staffTable = await prisma.table.findFirst({
       where: {
+        deletedAt: null,
         name: {
           equals: "Personál",
           mode: "insensitive",

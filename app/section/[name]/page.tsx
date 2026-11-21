@@ -12,6 +12,7 @@ export default async function SectionPage({
   const { name } = await params;
 
   const tables = await prisma.table.findMany({
+    where: { deletedAt: null },
     orderBy: { id: "asc" },
     include: {
       orders: {
